@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  eleventy:
+    image: wescran/eleventy:latest
+    ports:
+      - "8080:8080"
+    restart: always
+    volumes:
+      - ./.eleventy.js:/app/.eleventy.js
+      - ./src:/app/src
