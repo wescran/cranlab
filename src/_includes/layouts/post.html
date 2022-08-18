@@ -1,0 +1,32 @@
+---
+layout: layouts/base.html
+---
+<h1>{{ title }}</h1>
+
+<time datetime="{{ date | w3DateFilter }}">{{ date | dateFilter }}</time>
+{% if tags %}
+<p class="visually-hidden" id="tags-desc">Tags that this post has been filed under.</p>
+<ul class="tags-list" aria-describedby="tags-desc">
+  {% for tag in tags %}
+  <li>
+    <a href="/tags/{{ tag | slug }}/">#{{ tag | title | replace(' ', '') }}</a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<article>
+  <div class="post">
+    {{ content | safe }}
+  </div>
+  {% if collections.posts %}
+  <footer class="next-posts">
+    {%- set nextPost = collections.posts | getNextCollectionItem(page) %}
+    {%- set previousPost = collections.posts | getPreviousCollectionItem(page) %}
+    <ul>
+    {% if previousPost %}<li>Previous Post: <a href="{{ previousPost.url }}">{{ previousPost.data.title }}</a></li>{% endif %}
+    {% if nextPost %}<li>Next Post: <a href="{{ nextPost.url }}">{{ nextPost.data.title }}</a></li>{% endif %}
+    </ul>
+  </footer>
+  {% endif %}
+</article>

@@ -1,0 +1,19 @@
+---
+layout: layouts/base.html
+---
+<!-- Reference for representative h-card properties: https://microformats.org/wiki/h-card -->
+  <section class="h-card" rel="author">
+    <img class="u-photo" alt="My profile photo" src="{{ profile }}" />
+    <h1>
+      I'm <span class="p-name">Wesley Cranston</span>.
+    </h1>
+    <p class="p-note">
+      ...and I am a human on the Internet. My website is under construction!
+    </p>
+    <ul>
+      <li><a class="u-uid u-url" href="{{ domain }}">website</a></li>
+      <li><a class="u-url" href="https://github.com/{{ username }}" rel="me">github@{{ username }}</a></li>
+      <!-- Can't get rel=me to work, as they use a redirection url -->
+      <li><a class="u-url" href="https://twitter.com/{{ username }}" rel="me">twitter@{{ username }}</a></li>
+    </ul>
+  </section>

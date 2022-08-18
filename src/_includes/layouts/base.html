@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="author" content="IndieWeb blank site used by Wesley Cranston">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{{ description or metadata.description }}">
+  <title>{{ title }}</title>
+  <link rel="authorization_endpoint" href="https://indieauth.com/auth">
+  <link rel="token_endpoint" href="https://tokens.indieauth.com/token">
+  <link rel="icon" href="{{ icon }}">
+  <link rel="microsub" href="https://aperture.p3k.io/microsub/756"><!-- (Details: https://indieweb.org/Microsub#Getting_Started)-->
+  
+  <style>
+    @media (prefers-color-scheme: dark) {
+      html { background-color: #111111; color: #fbfbfb; }
+      a { color: #ca8465; }
+    }
+    body {
+      line-height: 1.6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-align: center;
+      margin: 1rem auto;
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    img.u-photo { border-radius: 50%; }
+    ul { padding: 0; list-style: none; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <nav aria-labelledby="main-site-menu">
+      <h2 id="main-site-menu">Check out my site!</h2>
+      <ol>
+        {%- for entry in collections.all | eleventyNavigation %}
+        <li class="nav-item{% if entry.url == page.url %} nav-item-active{% endif %}"><a href="{{ entry.url | url }}"{% if entry.url == page.url %} aria-current="page"{% endif %}>{{ entry.title }}</a></li>
+        {%- endfor %}
+      </ol>
+    </nav>
+  </header>
+  <main>
+    {{ content | safe }}
+  </main>
+  <footer></footer>
+</body>
+</html>
