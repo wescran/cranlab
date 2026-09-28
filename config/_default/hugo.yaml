@@ -8,10 +8,10 @@ params:
   author: 'Wesley Cranston'
   description: 'my personal site'
   social:
-    email: 'wescran@cranlab.ca'  # TODO: confirm address
+    email: 'wescran@cranlab.ca'
     github: 'wescran'
     twitter: 'wescran'
-    # bluesky: 'wescran.bsky.social'  # TODO: your Bluesky handle (enables rel=me + footer icon)
+    bluesky: 'wescran.bsky.social'
 menus:
   main:
     - name: About

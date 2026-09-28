@@ -33,7 +33,7 @@
     <li><a rel="me" href="https://bsky.app/profile/{{ . }}">{{ partial "icons/bluesky.svg" $ }}<span class="visually-hidden">Bluesky</span></a></li>
     {{ end }}
     {{ with .twitter }}
-    <li><a rel="me" href="https://x.com/{{ . }}">{{ partial "icons/twitter.svg" $ }}<span class="visually-hidden">Twitter</span></a></li>
+    <li><a href="https://x.com/{{ . }}">{{ partial "icons/twitter.svg" $ }}<span class="visually-hidden">Twitter</span></a></li>
     {{ end }}
   </ul>
 </address>
