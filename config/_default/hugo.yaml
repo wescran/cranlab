@@ -31,6 +31,8 @@ taxonomies:
 # resources.GetRemote results are cached forever by default, which would freeze
 # webmentions locally. Expire them so new mentions show up on the next build.
 caches:
+  images:
+    dir: :cacheDir/images
   getresource:
     maxAge: 5m
 pagination:

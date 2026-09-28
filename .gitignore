@@ -3,6 +3,10 @@ public/
 resources/
 .hugo_build.lock
 
+# Hugo cache dir set by build.sh, and local wrangler state
+.cache/
+.wrangler/
+
 # macOS
 .DS_Store
 
