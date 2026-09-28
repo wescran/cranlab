@@ -30,7 +30,7 @@
     <li><a rel="me" href="https://github.com/{{ . }}">{{ partial "icons/github.svg" $ }}<span class="visually-hidden">GitHub</span></a></li>
     {{ end }}
     {{ with .bluesky }}
-    <li><a rel="me" href="https://bsky.app/profile/{{ . }}">{{ partial "icons/bluesky.svg" $ }}<span class="visually-hidden">Bluesky</span></a></li>
+    <li><a rel="me atproto" href="https://bsky.app/profile/{{ . }}">{{ partial "icons/bluesky.svg" $ }}<span class="visually-hidden">Bluesky</span></a></li>
     {{ end }}
     {{ with .twitter }}
     <li><a href="https://x.com/{{ . }}">{{ partial "icons/twitter.svg" $ }}<span class="visually-hidden">Twitter</span></a></li>

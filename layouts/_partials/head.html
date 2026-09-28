@@ -14,7 +14,7 @@
 {{ with site.Params.social.github }}<link rel="me" href="https://github.com/{{ . }}">{{ end }}
 {{/* No rel=me for X/Twitter: it no longer exposes profile links in a way
      rel=me verifiers (indiewebify.me, IndieLogin) can read. */}}
-{{ with site.Params.social.bluesky }}<link rel="me" href="https://bsky.app/profile/{{ . }}">{{ end }}
+{{ with site.Params.social.bluesky }}<link rel="me atproto" href="https://bsky.app/profile/{{ . }}">{{ end }}
 
 {{/* Webmention endpoint, hosted by webmention.io (domain from baseURL) */}}
 {{ with (urls.Parse site.BaseURL).Host }}

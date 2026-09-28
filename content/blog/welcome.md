@@ -1,6 +1,6 @@
 ---
-date: 2026-09-23T13:57:13-04:00
-draft: true
+date: 2026-09-28
+draft: false
 title: Welcome
 tags:
   - writing
@@ -19,5 +19,3 @@ And I hope to make progress in these goals by committing to one task:
 - Write **ONE** blog post per month
 
 Let's see if this works, see you hopefully in 1 month's time.
-
-
