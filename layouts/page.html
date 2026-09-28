@@ -21,7 +21,7 @@
         {{ with .Params.tags }}
           <ul class="tags">
             {{ range . }}
-              <li><a class="p-category" href="{{ absURL (printf "tags/%s/" (urlize .)) }}">{{ . }}</a></li>
+              <li><a class="p-category" href="{{ relURL (printf "tags/%s/" (urlize .)) }}">{{ . }}</a></li>
             {{ end }}
           </ul>
         {{ end }}

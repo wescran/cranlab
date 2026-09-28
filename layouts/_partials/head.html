@@ -31,4 +31,4 @@
 {{/* CSS */}}
 {{ $opts := dict "externals" (slice "/fonts/*") }}
 {{ $style := resources.Get "css/main.css" | css.Build $opts | resources.Minify | resources.Fingerprint }}
-<link rel="stylesheet" href="{{ $style.Permalink }}">
+<link rel="stylesheet" href="{{ $style.RelPermalink }}">
