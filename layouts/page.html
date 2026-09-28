@@ -1,0 +1,53 @@
+{{ define "main" }}
+  {{ if eq .Section "blog" }}
+    <article class="h-entry">
+      <header>
+        <a class="u-url" href="{{ .Permalink }}">
+          <h1 class="p-name">{{ .Title }}</h1>
+        </a>
+        <p class="byline">
+          <span><a class="p-author h-card p-name u-url" href="{{ site.BaseURL }}">{{ site.Params.author }}</a></span>
+          <time class="dt-published" datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
+            {{ .Date.Format "January 2, 2006" }}
+          </time>
+          <span>{{ .ReadingTime }} min read</span>
+          {{- /* POSSE copies (front matter `syndication: [url, ...]`), e.g. the
+               Bluesky post Bridgy created. u-syndication lets Bridgy and other
+               readers connect the copies back to this original. */}}
+          {{- range .Params.syndication }}
+          <span><a class="u-syndication" href="{{ . }}">Also on {{ partial "syndication-name.html" . }}</a></span>
+          {{- end }}
+        </p>
+        {{ with .Params.tags }}
+          <ul class="tags">
+            {{ range . }}
+              <li><a class="p-category" href="{{ absURL (printf "tags/%s/" (urlize .)) }}">{{ . }}</a></li>
+            {{ end }}
+          </ul>
+        {{ end }}
+      </header>
+      <section class="e-content">
+        {{ .Content }}
+      </section>
+
+      {{- /* Bridgy Publish (front matter `syndicate: [bluesky]`).
+           The hidden brid.gy link is Bridgy's required proof of intent.
+           The p-bridgy-<silo>-content element replaces the full post text,
+           which would be cut off at Bluesky's 300 characters. Its text is the
+           front matter property named after the silo (e.g. `bluesky: "..."`),
+           else "Title: description", else the title. Bridgy appends the link
+           back to this post. See bin/syndicate. */}}
+      {{- range .Params.syndicate }}
+        {{- $text := index $.Params . | default (cond (ne $.Description "") (printf "%s: %s" $.Title $.Description) $.Title) }}
+      <p class="p-bridgy-{{ . }}-content" hidden>{{ $text }}</p>
+      <a href="https://brid.gy/publish/{{ . }}" hidden></a>
+      {{- end }}
+
+      {{ partial "webmentions.html" . }}
+    </article>
+  {{ else }}
+    {{/* Static page (about, etc.): no post metadata */}}
+    <h1>{{ .Title }}</h1>
+    {{ .Content }}
+  {{ end }}
+{{ end }}

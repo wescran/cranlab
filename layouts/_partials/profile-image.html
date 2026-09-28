@@ -1,0 +1,9 @@
+{{- /* Returns the face-cropped square profile image resource, or nil.
+     Usage: {{ with partial "profile-image.html" . }} ... {{ end }}
+     Crop is tuned for assets/images/profile.jpeg (1061x1600). */ -}}
+{{- $img := resources.GetMatch "images/profile.jpeg" -}}
+{{- $out := "" -}}
+{{- with $img -}}
+  {{- $out = ((.Crop "800x900 TopLeft").Crop "600x600 BottomRight") -}}
+{{- end -}}
+{{- return $out -}}

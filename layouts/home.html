@@ -1,0 +1,48 @@
+{{ define "main" }}
+  {{/* h-card: IndieWeb identity */}}
+  <section class="h-card">
+    <a class="u-url" rel="me" href="{{ site.BaseURL }}">
+    {{ with partial "profile-image.html" . }}
+      {{ with .Fill "200x200" }}
+    <img class="u-photo" src="{{ .RelPermalink }}" width="{{ .Width }}" height="{{ .Height }}" alt="{{ site.Params.author }}">
+      {{ end }}
+    {{ end }}
+    </a>
+    <header>
+      <h1 class="p-name">
+        {{ site.Params.author }}
+      </h1>
+      <p class="p-note">
+        {{ .RawContent | markdownify }}
+      </p>
+      {{/* Machine-readable h-card properties, not shown; the visible links live in the footer */}}
+      {{ with site.Params.social.email }}
+      <a class="u-email" href="mailto:{{ . }}" hidden>{{ . }}</a>
+      {{ end }}
+    </header>
+  </section>
+
+  {{/* Latest post */}}
+  {{ $posts := where site.RegularPages "Section" "blog" }}
+  {{ with $posts | first 1 }}
+    <section class="latest">
+      <h2>Latest Blog Post</h2>
+      {{ range . }}
+        <article class="h-entry">
+          <h3 class="p-name">
+            <a class="u-url" href="{{ .RelPermalink }}">{{ .Title }}</a>
+          </h3>
+          <p class="byline">
+            <time class="dt-published" datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
+              {{ .Date.Format "January 2, 2006" }}
+            </time>
+            <span>{{ .ReadingTime }} min read</span>
+          </p>
+          {{ with .Params.summary }}
+            <p class="p-summary">{{ . }}</p>
+          {{ end }}
+        </article>
+      {{ end }}
+    </section>
+  {{ end }}
+{{ end }}

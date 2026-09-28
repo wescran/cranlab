@@ -1,0 +1,108 @@
+{{- /*
+  Content adapter: turns every webmention of this site (from webmention.io)
+  into a hidden page under /webmentions, one per mention. Post templates find
+  theirs with:  where (site.GetPage "/webmentions").RegularPages "Params.target" <url>
+  (see layouts/_partials/webmentions.html).
+
+  Environment (Hugo only exposes HUGO_* variables to templates):
+    HUGO_WEBMENTION_IO_TOKEN     webmention.io API token (Settings page). Required
+                                 for real data; without it nothing is fetched.
+    HUGO_WEBMENTION_DEMO_TARGET  Optional, for local testing: a post URL. Mentions
+                                 are filed against it instead of fetched for this
+                                 site. By default they come from webmention.io's
+                                 example feed (one mention of every kind).
+    HUGO_WEBMENTION_DEMO_SOURCE  Optional, with DEMO_TARGET: a real public URL
+                                 (e.g. https://indieweb.org/). Uses its real
+                                 mentions (first 100, no token needed) instead of
+                                 the example feed.
+
+  Notes:
+  - A content adapter can't read site pages (Site.Pages isn't built yet), so we
+    ask for the whole domain in one query rather than one query per post.
+  - Private webmentions are included in token-authenticated results; they're
+    skipped here because this site is public.
+  - Target URLs are normalised (no #fragment, no trailing slash) so templates
+    can match them against .Permalink the same way.
+*/ -}}
+
+{{- $token := getenv "HUGO_WEBMENTION_IO_TOKEN" -}}
+{{- $demoTarget := getenv "HUGO_WEBMENTION_DEMO_TARGET" -}}
+{{- $domain := (urls.Parse .Site.BaseURL).Host -}}
+{{- $perPage := 1000 -}}{{- /* API maximum */ -}}
+
+{{- $base := "" -}}
+{{- $opts := dict -}}
+{{- $forceTarget := "" -}}
+{{- $maxPages := 0 -}}{{- /* 0 = no limit */ -}}
+{{- if $demoTarget -}}
+  {{- /* Never put the demo target in the query: Hugo's security policy rejects
+       remote URLs containing "localhost". Results are re-filed under it below. */ -}}
+  {{- with getenv "HUGO_WEBMENTION_DEMO_SOURCE" -}}
+    {{- warnf "webmentions: DEMO mode, real mentions of %s shown on %s" . $demoTarget -}}
+    {{- $base = printf "https://webmention.io/api/mentions.jf2?target=%s" (. | urlquery) -}}
+    {{- $perPage = 100 -}}
+    {{- $maxPages = 1 -}}
+  {{- else -}}
+    {{- warnf "webmentions: DEMO mode, example feed shown on %s" $demoTarget -}}
+    {{- $base = "https://webmention.io/api/example/mentions.jf2?seed=1&target=https://example.com/post" -}}
+  {{- end -}}
+  {{- $forceTarget = $demoTarget -}}
+{{- else if $token -}}
+  {{- $base = printf "https://webmention.io/api/mentions.jf2?domain=%s" $domain -}}
+  {{- $opts = dict "headers" (dict "Authorization" (printf "Bearer %s" $token)) -}}
+{{- else -}}
+  {{- warnf "webmentions: HUGO_WEBMENTION_IO_TOKEN is not set; building without webmentions" -}}
+{{- end -}}
+
+{{- /* Fetch every page of results */ -}}
+{{- $mentions := slice -}}
+{{- with $base -}}
+  {{- $first := partial "webmentions/fetch.html" (dict "url" (printf "%s&per-page=%d&page=0" . $perPage) "opts" $opts) -}}
+  {{- $mentions = $first.children | default slice -}}
+  {{- $totalPages := int (index ($first.paging | default dict) "total-pages" | default 1) -}}
+  {{- if gt $maxPages 0 -}}{{- $totalPages = math.Min $totalPages $maxPages | int -}}{{- end -}}
+  {{- if gt $totalPages 1 -}}
+    {{- range $p := seq 1 (sub $totalPages 1) -}}
+      {{- $next := partial "webmentions/fetch.html" (dict "url" (printf "%s&per-page=%d&page=%d" $base $perPage $p) "opts" $opts) -}}
+      {{- $mentions = $mentions | append ($next.children | default slice) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* One hidden page per public mention */ -}}
+{{- range $mentions -}}
+  {{- if index . "wm-private" -}}{{- continue -}}{{- end -}}
+
+  {{- $target := index (split ($forceTarget | default (index . "wm-target") | default "") "#") 0 | strings.TrimSuffix "/" -}}
+  {{- $url := .url | default (index . "wm-source") -}}
+
+  {{- /* Author: legacy mentions and pingbacks may have none; fall back to the source host */ -}}
+  {{- $a := .author | default dict -}}
+  {{- $authorURL := $a.url | default "" -}}
+  {{- $name := $a.name | default (urls.Parse (or $authorURL $url)).Host -}}
+
+  {{- /* Text: jf2 content is {text, html}; older entries may be a bare string or absent */ -}}
+  {{- $text := "" -}}
+  {{- with .content -}}
+    {{- if reflect.IsMap . -}}{{- $text = .text | default "" -}}{{- else -}}{{- $text = . -}}{{- end -}}
+  {{- end -}}
+  {{- $text = $text | default .summary | default .name | default "" -}}
+
+  {{- $date := time.AsTime (.published | default (index . "wm-received")) -}}
+
+  {{- $.AddPage (dict
+    "kind" "page"
+    "path" (printf "%v" (index . "wm-id"))
+    "title" $name
+    "dates" (dict "date" $date)
+    "build" (dict "render" "never" "list" "local" "publishResources" false)
+    "params" (dict
+      "target" $target
+      "property" (index . "wm-property" | default "mention-of")
+      "url" $url
+      "rsvp" (.rsvp | default "")
+      "text" $text
+      "author" (dict "name" $name "url" $authorURL "photo" ($a.photo | default ""))
+    )
+  ) -}}
+{{- end -}}

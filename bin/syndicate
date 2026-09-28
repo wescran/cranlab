@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Cross-post (POSSE) a live blog post to a silo via Bridgy Publish.
+#
+# Usage: bin/syndicate <post-url> [bluesky|mastodon|github|flickr]
+#        (silo defaults to bluesky)
+#
+# Before running:
+#   1. The post's front matter has `syndicate: [<silo>]`, and it is deployed.
+#      That renders the hidden https://brid.gy/publish/<silo> link Bridgy
+#      requires as proof you want the post published.
+#   2. Your Bridgy account for that silo is connected with publishing enabled,
+#      and the silo profile links to https://cranlab.ca.
+#
+# Bridgy answers synchronously: on success it returns 201 with the new silo
+# post's URL in the Location header. Add that URL to the post's front matter
+# as `syndication:` so the post links to its copy (u-syndication).
+set -euo pipefail
+
+url=${1:?usage: bin/syndicate <post-url> [bluesky|mastodon|github|flickr]}
+silo=${2:-bluesky}
+target="https://brid.gy/publish/$silo"
+
+# Bridgy rejects posts without the backlink; catch that here with a clearer message.
+if ! curl -fsSL "$url" | grep -qF "$target"; then
+  echo "error: $url does not link to $target" >&2
+  echo "Add 'syndicate: [$silo]' to the post's front matter and deploy first." >&2
+  exit 1
+fi
+
+headers=$(mktemp)
+body=$(mktemp)
+trap 'rm -f "$headers" "$body"' EXIT
+
+status=$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' \
+  --data-urlencode "source=$url" \
+  --data-urlencode "target=$target" \
+  https://brid.gy/publish/webmention)
+
+if [[ $status != 201 ]]; then
+  echo "error: Bridgy returned HTTP $status" >&2
+  cat "$body" >&2
+  echo >&2
+  exit 1
+fi
+
+location=$(grep -i '^location:' "$headers" | tail -n1 | cut -d' ' -f2- | tr -d '\r')
+echo "Published to $silo: $location"
+echo
+echo "Add this to the post's front matter, then commit and deploy:"
+echo
+echo "syndication:"
+echo "  - $location"

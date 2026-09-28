@@ -1,0 +1,23 @@
+{{- /* Fetch and decode one page of a webmention.io jf2 feed.
+     Context: dict "url" <string> "opts" <resources.GetRemote options>
+     Returns: the decoded feed (map), or an empty dict on any failure.
+     Failures are warnings, never build errors: a webmention.io outage must
+     not break a deploy. The token travels in opts.headers, never the URL,
+     so it can't leak into these messages. */ -}}
+{{- $data := dict -}}
+{{- with try (resources.GetRemote .url .opts) -}}
+  {{- with .Err -}}
+    {{- warnf "webmentions: request failed: %s" . -}}
+  {{- else with .Value -}}
+    {{- with try (.Content | transform.Unmarshal) -}}
+      {{- with .Err -}}
+        {{- warnf "webmentions: could not decode response: %s" . -}}
+      {{- else -}}
+        {{- $data = .Value -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- warnf "webmentions: empty response" -}}
+  {{- end -}}
+{{- end -}}
+{{- return $data -}}

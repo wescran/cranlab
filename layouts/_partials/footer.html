@@ -1,0 +1,40 @@
+<p class="copyright"><small>&copy; {{ now.Year }} {{ site.Params.author }}</small></p>
+<p class="license">
+  <small>
+    Licensed under
+    <a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>
+    <span class="cc-icons">
+      {{- partial "icons/cc-cc.svg" . -}}
+      {{- partial "icons/cc-by.svg" . -}}
+      {{- partial "icons/cc-sa.svg" . -}}
+    </span>
+  </small>
+</p>
+{{ $hasLastmod := not .Lastmod.IsZero }}
+{{ if or $hasLastmod .GitInfo }}
+<p class="revision">
+  <small>
+    {{ with $hasLastmod }}Last updated <time datetime="{{ $.Lastmod.Format "2006-01-02T15:04:05Z07:00" }}">{{ $.Lastmod.Format "January 2, 2006" }}</time>{{ end }}
+    {{ with .GitInfo }}<code title="Commit {{ .Hash }}">{{ .AbbreviatedHash }}</code>{{ end }}
+  </small>
+</p>
+{{ end }}
+
+{{ with site.Params.social }}
+<address>
+  <ul class="social">
+    {{ with .email }}
+    <li><a href="mailto:{{ . }}">{{ partial "icons/mail.svg" $ }}<span class="visually-hidden">Email</span></a></li>
+    {{ end }}
+    {{ with .github }}
+    <li><a rel="me" href="https://github.com/{{ . }}">{{ partial "icons/github.svg" $ }}<span class="visually-hidden">GitHub</span></a></li>
+    {{ end }}
+    {{ with .bluesky }}
+    <li><a rel="me" href="https://bsky.app/profile/{{ . }}">{{ partial "icons/bluesky.svg" $ }}<span class="visually-hidden">Bluesky</span></a></li>
+    {{ end }}
+    {{ with .twitter }}
+    <li><a rel="me" href="https://x.com/{{ . }}">{{ partial "icons/twitter.svg" $ }}<span class="visually-hidden">Twitter</span></a></li>
+    {{ end }}
+  </ul>
+</address>
+{{ end }}

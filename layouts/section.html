@@ -1,0 +1,21 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  <section class="h-feed">
+    {{ range (.Paginate .Pages).Pages }}
+      <article class="h-entry">
+        <time class="dt-published" datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">
+          {{ .Date.Format "2006-01-02" }}
+        </time>
+        <a class="p-name u-url" href="{{ .RelPermalink }}">{{ .Title }}</a>
+        {{ with .Params.tags }}
+          <ul class="tags">
+            {{ range . }}
+              <li><a class="p-category" href="{{ absURL (printf "tags/%s/" (urlize .)) }}">{{ . }}</a></li>
+            {{ end }}
+          </ul>
+        {{ end }}
+      </article>
+    {{ end }}
+  </section>
+  {{ partial "pagination.html" . }}
+{{ end }}

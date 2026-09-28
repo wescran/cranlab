@@ -1,0 +1,21 @@
+{{- /* Author h-card for a webmention.
+     Context: dict "author" <map: name,url,photo> "compact" <bool>
+       compact: avatar only, name visually hidden (facepiles)
+     The avatar is decorative (alt=""); the p-name text is the accessible name.
+     No photo: a letter placeholder. No URL: an unlinked h-card.
+     All values come from third parties, so they go through Hugo's contextual
+     auto-escaping (plain template actions, no safeHTML). */ -}}
+{{- $a := .author -}}
+{{- $tag := cond (ne $a.url "") "a" "span" -}}
+{{- if eq $tag "a" -}}
+<a class="p-author h-card" href="{{ $a.url }}"{{ if .compact }} title="{{ $a.name }}"{{ end }}>
+{{- else -}}
+<span class="p-author h-card"{{ if .compact }} title="{{ $a.name }}"{{ end }}>
+{{- end -}}
+{{- with $a.photo -}}
+<img class="u-photo" src="{{ . }}" alt="" width="40" height="40" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+{{- else -}}
+<span class="avatar-placeholder" aria-hidden="true">{{ substr $a.name 0 1 | upper }}</span>
+{{- end -}}
+<span class="p-name{{ if .compact }} visually-hidden{{ end }}">{{ $a.name }}</span>
+{{- if eq $tag "a" }}</a>{{ else }}</span>{{ end -}}

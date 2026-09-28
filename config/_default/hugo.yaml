@@ -1,0 +1,50 @@
+baseURL: 'https://cranlab.ca/'
+locale: 'en-us'
+title: 'CranLab'
+enableGitInfo: true
+enableRobotsTXT: true
+capitalizeListTitles: false
+params:
+  author: 'Wesley Cranston'
+  description: 'my personal site'
+  social:
+    email: 'wescran@cranlab.ca'  # TODO: confirm address
+    github: 'wescran'
+    twitter: 'wescran'
+    # bluesky: 'wescran.bsky.social'  # TODO: your Bluesky handle (enables rel=me + footer icon)
+menus:
+  main:
+    - name: About
+      pageRef: /about
+      weight: 10
+    - name: Blog
+      pageRef: /blog
+      weight: 20
+    - name: Tags
+      pageRef: /tags
+      weight: 30
+    - name: RSS
+      url: /index.xml
+      weight: 40
+taxonomies:
+  tag: 'tags'
+# resources.GetRemote results are cached forever by default, which would freeze
+# webmentions locally. Expire them so new mentions show up on the next build.
+caches:
+  getresource:
+    maxAge: 5m
+pagination:
+  pagerSize: 10
+outputs:
+  home:
+    - html
+    - rss
+  section:
+    - html
+    - rss
+  taxonomy:
+    - html
+  term:
+    - html
+  page:
+    - html

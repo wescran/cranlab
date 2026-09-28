@@ -1,0 +1,93 @@
+{{- /* Webmentions for the current page.
+     Data comes from the /webmentions content adapter. Renders nothing when
+     the page has no mentions. Must be called inside the post's h-entry so the
+     h-cite responses nest as its p-like / p-repost / p-comment properties.
+
+     Layout:
+       <hr>                 thematic break separating the article from its responses
+       <section>            "Webmentions"
+         <details> x4       one collapsible group each: likes, reposts, replies,
+                            mentions (mentions = everything else: mentions,
+                            bookmarks, RSVPs). A group starts open when it has
+                            $openMax items or fewer, collapsed otherwise.
+     Collapsed <details> content stays in the DOM, so microformats parsers
+     (webmention.io, Bridgy, indiewebify.me) still see every response. */ -}}
+{{- $openMax := 5 -}}
+{{- $target := strings.TrimSuffix "/" .Permalink -}}
+{{- $all := slice -}}
+{{- with site.GetPage "/webmentions" -}}
+  {{- $all = where .RegularPages "Params.target" $target -}}
+{{- end -}}
+
+{{- with $all -}}
+{{- $likes := where . "Params.property" "like-of" -}}
+{{- $reposts := where . "Params.property" "repost-of" -}}
+{{- $replies := (where . "Params.property" "in-reply-to").ByDate -}}
+{{- $mentions := (where . "Params.property" "not in" (slice "like-of" "repost-of" "in-reply-to")).ByDate -}}
+
+<hr>
+<section class="webmentions" aria-labelledby="webmentions-heading">
+  <h2 id="webmentions-heading">Webmentions</h2>
+
+  {{- range $group := slice
+      (dict "pages" $likes   "class" "p-like"   "one" "like"   "many" "likes")
+      (dict "pages" $reposts "class" "p-repost" "one" "repost" "many" "reposts") }}
+    {{- with $group.pages }}
+  <details{{ if le (len .) $openMax }} open{{ end }}>
+    <summary><h3>{{ len . }} {{ cond (eq (len .) 1) $group.one $group.many }}</h3></summary>
+    <ul class="facepile">
+      {{- range . }}
+      <li class="{{ $group.class }} h-cite">
+        {{- partial "webmentions/author.html" (dict "author" .Params.author "compact" true) -}}
+        <data class="u-url" value="{{ .Params.url }}"></data>
+      </li>
+      {{- end }}
+    </ul>
+  </details>
+    {{- end }}
+  {{- end }}
+
+  {{- with $replies }}
+  <details{{ if le (len .) $openMax }} open{{ end }}>
+    <summary><h3>{{ len . }} {{ cond (eq (len .) 1) "reply" "replies" }}</h3></summary>
+    <ol class="replies">
+      {{- range . }}
+      <li class="p-comment h-cite">
+        <p class="response-meta">
+          {{- partial "webmentions/author.html" (dict "author" .Params.author) -}}
+          <a class="u-url" href="{{ .Params.url }}"><time class="dt-published" datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "January 2, 2006" }}</time></a>
+        </p>
+        {{- with .Params.text }}
+        <p class="p-content">{{ . | truncate 1000 }}</p>
+        {{- end }}
+      </li>
+      {{- end }}
+    </ol>
+  </details>
+  {{- end }}
+
+  {{- with $mentions }}
+  <details{{ if le (len .) $openMax }} open{{ end }}>
+    <summary><h3>{{ len . }} {{ cond (eq (len .) 1) "mention" "mentions" }}</h3></summary>
+    <ol class="mentions">
+      {{- range . }}
+      <li class="p-mention h-cite">
+        <p class="response-meta">
+          {{- partial "webmentions/author.html" (dict "author" .Params.author) -}}
+          <a class="u-url" href="{{ .Params.url }}">
+            {{- if eq .Params.property "bookmark-of" }}bookmarked this
+            {{- else if eq .Params.property "rsvp" }}RSVP'd {{ .Params.rsvp }}
+            {{- else }}mentioned this{{ end -}}
+          </a>
+          <time class="dt-published" datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "January 2, 2006" }}</time>
+        </p>
+        {{- with .Params.text }}
+        <p class="p-content">{{ . | truncate 280 }}</p>
+        {{- end }}
+      </li>
+      {{- end }}
+    </ol>
+  </details>
+  {{- end }}
+</section>
+{{- end -}}

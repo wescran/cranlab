@@ -1,0 +1,14 @@
+<nav>
+  <a href="/">{{ partial "icons/maple-leaf.svg" . }}<strong>{{ site.Title }}</strong></a>
+  {{ with site.Menus.main }}
+    <ul>
+      {{ range . }}
+        <li>
+          <a href="{{ .URL }}"
+            {{- if $.IsMenuCurrent "main" . }} aria-current="page"{{ end -}}
+          >{{ .Name }}</a>
+        </li>
+      {{ end }}
+    </ul>
+  {{ end }}
+</nav>

@@ -1,0 +1,4 @@
+{{- /* Human name for a syndication URL: known silos by host, else the host. */ -}}
+{{- $host := (urls.Parse .).Host | strings.TrimPrefix "www." -}}
+{{- $names := dict "bsky.app" "Bluesky" "github.com" "GitHub" "flickr.com" "Flickr" -}}
+{{- index $names $host | default $host -}}

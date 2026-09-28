@@ -1,0 +1,34 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}</title>
+<meta name="author" content="{{ site.Params.author }}">
+<meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ site.Params.description }}{{ end }}">
+
+{{ with partial "profile-image.html" . }}
+  {{ with .Fill "32x32 png" }}<link rel="icon" type="image/png" sizes="32x32" href="{{ .RelPermalink }}">{{ end }}
+  {{ with .Fill "180x180 png" }}<link rel="apple-touch-icon" sizes="180x180" href="{{ .RelPermalink }}">{{ end }}
+{{ end }}
+
+{{/* IndieWeb rel-me links */}}
+{{ with site.Params.social.github }}<link rel="me" href="https://github.com/{{ . }}">{{ end }}
+{{ with site.Params.social.twitter }}<link rel="me" href="https://x.com/{{ . }}">{{ end }}
+{{ with site.Params.social.bluesky }}<link rel="me" href="https://bsky.app/profile/{{ . }}">{{ end }}
+
+{{/* Webmention endpoint, hosted by webmention.io (domain from baseURL) */}}
+{{ with (urls.Parse site.BaseURL).Host }}
+<link rel="webmention" href="https://webmention.io/{{ . }}/webmention">
+{{ end }}
+
+{{/* RSS autodiscovery */}}
+{{ range .AlternativeOutputFormats }}
+  {{ printf `<link rel="%s" type="%s" href="%s" title="%s">` .Rel .MediaType.Type .Permalink (printf "%s - %s" site.Title .Name) | safeHTML }}
+{{ end }}
+
+{{/* Preload the body font (used on every page) to avoid a fallback-font flash */}}
+<link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+
+{{/* CSS */}}
+{{ $opts := dict "externals" (slice "/fonts/*") }}
+{{ $style := resources.Get "css/main.css" | css.Build $opts | resources.Minify | resources.Fingerprint }}
+<link rel="stylesheet" href="{{ $style.Permalink }}">
