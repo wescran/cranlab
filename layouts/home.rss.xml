@@ -21,7 +21,10 @@
       <link>{{ .Permalink }}</link>
       <pubDate>{{ .Date.Format "Mon, 02 Jan 2006 15:04:05 -0700" }}</pubDate>
       <guid>{{ .Permalink }}</guid>
-      <description>{{ .Summary | html }}</description>
+      {{- /* Plain text: feed readers and Bridgy Fed (which bridges this feed to
+           Bluesky/fediverse) show it as the link card text. Front matter
+           `description` if set, else the auto summary without markup. */}}
+      <description>{{ .Description | default (.Summary | plainify | htmlUnescape) | truncate 300 }}</description>
     </item>
     {{- end }}
   </channel>

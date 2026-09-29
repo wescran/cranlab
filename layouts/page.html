@@ -11,9 +11,8 @@
             {{ .Date.Format "January 2, 2006" }}
           </time>
           <span>{{ .ReadingTime }} min read</span>
-          {{- /* POSSE copies (front matter `syndication: [url, ...]`), e.g. the
-               Bluesky post Bridgy created. u-syndication lets Bridgy and other
-               readers connect the copies back to this original. */}}
+          {{- /* Copies of this post elsewhere (front matter `syndication: [url, ...]`).
+               Optional: Bridgy Fed bridges posts from the RSS feed on its own. */}}
           {{- range .Params.syndication }}
           <span><a class="u-syndication" href="{{ . }}">Also on {{ partial "syndication-name.html" . }}</a></span>
           {{- end }}
@@ -29,19 +28,6 @@
       <section class="e-content">
         {{ .Content }}
       </section>
-
-      {{- /* Bridgy Publish (front matter `syndicate: [bluesky]`).
-           The hidden brid.gy link is Bridgy's required proof of intent.
-           The p-bridgy-<silo>-content element replaces the full post text,
-           which would be cut off at Bluesky's 300 characters. Its text is the
-           front matter property named after the silo (e.g. `bluesky: "..."`),
-           else "Title: description", else the title. Bridgy appends the link
-           back to this post. See bin/syndicate. */}}
-      {{- range .Params.syndicate }}
-        {{- $text := index $.Params . | default (cond (ne $.Description "") (printf "%s: %s" $.Title $.Description) $.Title) }}
-      <p class="p-bridgy-{{ . }}-content" hidden>{{ $text }}</p>
-      <a href="https://brid.gy/publish/{{ . }}" hidden></a>
-      {{- end }}
 
       {{ partial "webmentions.html" . }}
     </article>

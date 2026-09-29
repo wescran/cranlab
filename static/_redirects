@@ -1,0 +1,5 @@
+# Cloudflare Workers static assets redirect rules (not served as a file).
+# Make this site's fediverse handle @cranlab.ca@cranlab.ca by delegating
+# WebFinger discovery to Bridgy Fed. https://fed.brid.gy/docs#fediverse-get-started
+/.well-known/webfinger  https://fed.brid.gy/.well-known/webfinger  302
+/.well-known/host-meta* https://fed.brid.gy/.well-known/host-meta:splat 302
