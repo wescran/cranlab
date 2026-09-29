@@ -11,7 +11,7 @@ params:
     email: 'wescran@cranlab.ca'
     github: 'wescran'
     twitter: 'wescran'
-    bluesky: 'wescran.bsky.social'
+    bluesky: 'cranlab.ca'
 menus:
   main:
     - name: About

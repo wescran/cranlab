@@ -1,0 +1,6 @@
+{{- $img := resources.GetMatch "images/featured.jpg" -}}
+{{- $out := "" -}}
+{{- with $img -}}
+  {{- $out = (.Crop "4080x2030 BottomLeft").Crop "4080x1360 TopLeft" -}}
+{{- end -}}
+{{- return $out -}}

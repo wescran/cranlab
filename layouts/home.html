@@ -1,7 +1,16 @@
 {{ define "main" }}
   {{/* h-card: IndieWeb identity */}}
   <section class="h-card">
-    <a class="u-url" rel="me" href="{{ site.BaseURL }}">
+    {{- /* Header image for the bridged Bluesky/fediverse profile (Bridgy Fed reads
+         u-featured). A <data> element instead of <img>: parsers take the URL from
+         `value`, and browsers never download it since nothing is displayed.
+         1500x500 = Bluesky's 3:1 banner size. */}}
+    {{ with partial "featured-image.html" . }}
+      {{ with .Resize "1500x" }}
+    <data class="u-featured" value="{{ .Permalink }}"></data>
+      {{ end }}
+    {{ end }}
+    <a class="u-url u-uid" rel="me" href="{{ site.BaseURL }}">
     {{ with partial "profile-image.html" . }}
       {{ with .Fill "200x200" }}
     <img class="u-photo" src="{{ .RelPermalink }}" width="{{ .Width }}" height="{{ .Height }}" alt="{{ site.Params.author }}">
@@ -16,8 +25,16 @@
         {{ .RawContent | markdownify }}
       </p>
       {{/* Machine-readable h-card properties, not shown; the visible links live in the footer */}}
-      {{ with site.Params.social.email }}
-      <a class="u-email" href="mailto:{{ . }}" hidden>{{ . }}</a>
+      {{ with site.Params.social }}
+      {{ with .email }}
+      <a rel="me" class="u-email u-url" href="mailto:{{ . }}" hidden>{{ . }}</a>
+      {{ end }}
+      {{ with .github }}
+      <a rel="me" class="u-url" href="https://github.com/{{ . }}" hidden>{{ . }}</a>
+      {{ end }}
+      {{ with .bluesky }}
+      <a rel="me atproto" class="u-url" href="https://bsky.app/profile/{{ . }}" hidden>{{ . }}</a>
+      {{ end }}
       {{ end }}
     </header>
   </section>

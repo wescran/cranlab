@@ -250,7 +250,7 @@ section.h-card > a {
   line-height: 0; /* remove inline gap under the img */
 }
 
-section.h-card img {
+section.h-card img.u-photo {
   width: 10rem;
   height: auto;
   aspect-ratio: 1;
