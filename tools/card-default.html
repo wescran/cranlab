@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  Default link card (1200x630) for posts without an `image:`; used by
+  layouts/_partials/card-image.html as the RSS enclosure Bridgy Fed shows on
+  Bluesky/fediverse. The wordmark sits on the waterline in front of the trees,
+  with a faded mirror image in the lake. Regenerate after editing, from the
+  repo root:
+
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --window-size=1200,630 --virtual-time-budget=3000 \
+    --screenshot=assets/images/card-default.png "file://$PWD/tools/card-default.html"
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Geist';
+    src: url('../static/fonts/Geist-Variable.woff2') format('woff2');
+    font-weight: 100 900;
+  }
+  :root {
+    --waterline: 395px;  /* shoreline y in the cropped photo; tune if the crop changes */
+    --sink: 0.145em;     /* space below the text baseline inside the wordmark box */
+  }
+  html, body {
+    margin: 0;
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: #1b2130; /* fallback while the photo loads */
+  }
+  body {
+    position: relative;
+    /* Lake photo (assets/images/featured.jpg), cropped like the Bluesky
+       header. Light tint overall, plus a soft dark glow around the
+       wordmark and its reflection so the red reads over the fog. */
+    background:
+      radial-gradient(ellipse 55% 45% at 50% var(--waterline), rgb(15 20 30 / 0.5), transparent 100%),
+      linear-gradient(rgb(15 20 30 / 0.25), rgb(15 20 30 / 0.25)),
+      url('../assets/images/featured.jpg') left 45% / cover no-repeat;
+    font-family: 'Geist', sans-serif;
+  }
+  .wordmark {
+    position: absolute;
+    left: 12%;
+    display: flex;
+    align-items: baseline; /* leaf stem and text both stand on the baseline */
+    gap: 0.3em;
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ff0066; /* site --rule */
+    white-space: nowrap;
+  }
+  .wordmark svg {
+    width: 0.95em;
+    height: 0.95em;
+    flex: none;
+  }
+  /* Baseline exactly on the waterline */
+  .logo {
+    bottom: calc(630px - var(--waterline) - var(--sink));
+    transform: translateX(-50%);
+    filter: drop-shadow(0 4px 24px rgb(0 0 0 / 0.45));
+  }
+  /* Mirror image below the waterline: flipped, faint, slightly blurred,
+     fading out with depth like the trees' reflection. */
+  .reflection {
+    top: calc(var(--waterline) - var(--sink));
+    transform: translateX(-50%) scaleY(-1);
+    opacity: 0.3;
+    filter: blur(1.5px);
+    /* mask is in the element's own (unflipped) space: opaque at the
+       baseline, i.e. the waterline, transparent toward the letter tops */
+    -webkit-mask-image: linear-gradient(to top, #000 15%, transparent 85%);
+    mask-image: linear-gradient(to top, #000 15%, transparent 85%);
+  }
+</style>
+</head>
+<body>
+  <div class="wordmark logo">
+    <svg viewBox="3050 300 3500 4200" fill="currentColor" aria-hidden="true"><path d="m4890 4430-45-863a95 95 0 0 1 111-98l859 151-116-320a65 65 0 0 1 20-73l941-762-212-99a65 65 0 0 1-34-79l186-572-542 115a65 65 0 0 1-73-38l-105-247-423 454a65 65 0 0 1-111-57l204-1052-327 189a65 65 0 0 1-91-27l-332-652-332 652a65 65 0 0 1-91 27l-327-189 204 1052a65 65 0 0 1-111 57l-423-454-105 247a65 65 0 0 1-73 38l-542-115 186 572a65 65 0 0 1-34 79l-212 99 941 762a65 65 0 0 1 20 73l-116 320 859-151a95 95 0 0 1 111 98l-45 863z"/></svg>
+    <span>CranLab</span>
+  </div>
+  <div class="wordmark reflection" aria-hidden="true">
+    <svg viewBox="3050 300 3500 4200" fill="currentColor"><path d="m4890 4430-45-863a95 95 0 0 1 111-98l859 151-116-320a65 65 0 0 1 20-73l941-762-212-99a65 65 0 0 1-34-79l186-572-542 115a65 65 0 0 1-73-38l-105-247-423 454a65 65 0 0 1-111-57l204-1052-327 189a65 65 0 0 1-91-27l-332-652-332 652a65 65 0 0 1-91 27l-327-189 204 1052a65 65 0 0 1-111 57l-423-454-105 247a65 65 0 0 1-73 38l-542-115 186 572a65 65 0 0 1-34 79l-212 99 941 762a65 65 0 0 1 20 73l-116 320 859-151a95 95 0 0 1 111 98l-45 863z"/></svg>
+    <span>CranLab</span>
+  </div>
+</body>
+</html>

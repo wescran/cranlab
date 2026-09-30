@@ -1,0 +1,27 @@
+{{- /* Link-card image for a post (used as the RSS <enclosure>, which Bridgy Fed
+     turns into the Bluesky/fediverse card thumbnail).
+
+     Context: the post page. Returns an image resource sized 1200x630 (the
+     common link-card shape), or "" if none.
+
+     Source, in order:
+       1. Front matter `image:` naming a file in the post's own folder
+          (page bundle), e.g. `image: cover.jpg`
+       2. Front matter `image:` naming a file under assets/,
+          e.g. `image: images/homelab-rack.jpg`
+       3. The default CranLab card, assets/images/card-default.png
+          (generated from tools/card-default.html) */ -}}
+{{- $out := "" -}}
+{{- with .Params.image -}}
+  {{- with $.Resources.Get . | default (resources.Get .) -}}
+    {{- $out = .Fill "1200x630 Center" -}}
+  {{- else -}}
+    {{- warnf "card image %q not found for %s" . $.File.Path -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $out -}}
+  {{- with resources.Get "images/card-default.png" -}}
+    {{- $out = .Process "jpg q82" -}}{{- /* photo card: JPEG is far smaller than PNG */ -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

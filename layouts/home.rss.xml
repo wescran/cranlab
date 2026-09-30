@@ -25,6 +25,10 @@
            Bluesky/fediverse) show it as the link card text. Front matter
            `description` if set, else the auto summary without markup. */}}
       <description>{{ .Description | default (.Summary | plainify | htmlUnescape) | truncate 300 }}</description>
+      {{- /* Card thumbnail for Bridgy Fed (see _partials/card-image.html) */}}
+      {{- with partial "card-image.html" . }}
+      <enclosure url="{{ .Permalink }}" length="{{ len .Content }}" type="{{ .MediaType.Type }}" />
+      {{- end }}
     </item>
     {{- end }}
   </channel>
