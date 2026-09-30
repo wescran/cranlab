@@ -75,10 +75,23 @@ main() {
   echo "Configuring Git..."
   git config --global core.quotepath false
 
-  # Fetch full Git history
+  # Fetch full Git history (for accurate per-page .Lastmod / .GitInfo).
+  # The fetch occasionally dies mid-transfer (TLS/pack errors from the build
+  # network), so retry, and if it still fails build anyway: a shallow clone
+  # only makes "Last updated" less precise, which isn't worth a failed deploy.
   if [[ $(git rev-parse --is-shallow-repository) == true ]]; then
     echo "Fetching full Git history..."
-    git fetch --unshallow
+    for attempt in 1 2 3; do
+      if git fetch --unshallow; then
+        break
+      fi
+      if [[ $attempt == 3 ]]; then
+        echo "WARNING: could not fetch full Git history; building from a shallow clone."
+      else
+        echo "Fetch failed (attempt ${attempt}/3), retrying in $((attempt * 5))s..."
+        sleep $((attempt * 5))
+      fi
+    done
   fi
 
   # Initialize Git submodules
