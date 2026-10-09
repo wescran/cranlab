@@ -1,0 +1,9 @@
+{
+  "$type": "site.standard.publication",
+  "url": "https://cranlab.ca",
+  "name": "CranLab",
+  "description": "My personal indieweb site",
+  "preferences": {
+    "showInDiscover": true
+  }
+}
