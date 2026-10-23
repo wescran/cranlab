@@ -1,14 +1,6 @@
-# Hugo build output
-public/
-resources/
-.hugo_build.lock
-
-# Hugo cache dir set by build.sh, and local wrangler state
-.cache/
-.wrangler/
+# Local builds
+/site
+/dist/
 
 # macOS
 .DS_Store
-
-# Obsidian vault state (editing content/ in Obsidian)
-.obsidian/
