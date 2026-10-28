@@ -109,11 +109,14 @@ func TestHome(t *testing.T) {
 	if got := property(card, "url"); got != "https://cranlab.ca/" {
 		t.Errorf("h-card url = %q, want https://cranlab.ca/", got)
 	}
-	if photo := property(card, "photo"); !strings.HasPrefix(photo, "https://cranlab.ca/static/images/profile.jpeg?v=") {
+	if photo := property(card, "photo"); !strings.HasPrefix(photo, "https://cranlab.ca/static/images/profile-200.jpeg?v=") {
 		t.Errorf("h-card photo = %q, want the versioned profile image", photo)
 	}
 	if note := property(card, "note"); !strings.Contains(note, "Welcome to CranLab") {
 		t.Errorf("h-card note = %q, want the home intro", note)
+	}
+	if !strings.Contains(body, "&copy; 2026 Wesley Cranston") {
+		t.Error("footer should show © with the current year (from Deps.Now)")
 	}
 }
 
@@ -143,8 +146,9 @@ func TestHead(t *testing.T) {
 			if !hasPrefix(data.Rels["stylesheet"], "https://cranlab.ca/static/css/main.css?v=") {
 				t.Errorf("stylesheet = %v, want the versioned main.css", data.Rels["stylesheet"])
 			}
-			if !hasPrefix(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2?v=") {
-				t.Errorf("preload = %v, want the versioned Geist font", data.Rels["preload"])
+			// Unversioned, to match main.css's @font-face URL exactly.
+			if !contains(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2") {
+				t.Errorf("preload = %v, want the Geist font at the URL main.css uses", data.Rels["preload"])
 			}
 		})
 	}

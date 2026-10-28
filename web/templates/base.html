@@ -1,1 +1,71 @@
-{{/* TODO: port layouts/baseof.html, _partials/head.html, header.html, footer.html (without Bridgy Fed's u-featured and the "last updated" line). Defines the page layout with a "main" block. */}}
+{{- /* Page layout (from Hugo's baseof.html and the head, header and footer
+     partials). Each page template defines "main". */ -}}
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{if .Title}}{{.Title}} | CranLab{{else}}CranLab{{end}}</title>
+<meta name="author" content="Wesley Cranston">
+<meta name="description" content="{{with .Description}}{{.}}{{else}}my personal site{{end}}">
+
+<link rel="icon" type="image/png" sizes="32x32" href="{{asset "images/favicon-32.png"}}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{asset "images/apple-touch-icon.png"}}">
+
+{{- /* IndieWeb rel-me links */}}
+<link rel="me" href="https://github.com/wescran">
+<link rel="me atproto" href="https://bsky.app/profile/cranlab.ca">
+
+{{- /* Webmention endpoint, hosted by webmention.io */}}
+<link rel="webmention" href="https://webmention.io/{{.Config.WebmentionDomain}}/webmention">
+
+{{- /* RSS autodiscovery */}}
+<link rel="alternate" type="application/rss+xml" href="/index.xml" title="CranLab - RSS">
+
+{{- /* Preload the body font (used on every page) to avoid a fallback-font
+     flash. Same unversioned URL as main.css's @font-face, or the browser
+     downloads it twice. */}}
+<link rel="preload" href="/static/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "css/main.css"}}">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">{{template "icon-maple-leaf"}}<strong>CranLab</strong></a>
+      <ul>
+        <li><a href="/about"{{if eq .Path "/about"}} aria-current="page"{{end}}>About</a></li>
+        <li><a href="/articles"{{if eq .Path "/articles"}} aria-current="page"{{end}}>Articles</a></li>
+        <li><a href="/notes"{{if eq .Path "/notes"}} aria-current="page"{{end}}>Notes</a></li>
+        <li><a href="/tags"{{if eq .Path "/tags"}} aria-current="page"{{end}}>Tags</a></li>
+        <li><a href="/index.xml">RSS</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    {{block "main" .}}{{end}}
+  </main>
+  <footer>
+    <p class="copyright"><small>&copy; {{.Year}} Wesley Cranston</small></p>
+    <p class="license">
+      <small>
+        Licensed under
+        <a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>
+        <span class="cc-icons">
+          {{- template "icon-cc-cc" -}}
+          {{- template "icon-cc-by" -}}
+          {{- template "icon-cc-sa" -}}
+        </span>
+      </small>
+    </p>
+    <address>
+      <ul class="social">
+        <li><a href="mailto:wescran@cranlab.ca">{{template "icon-mail"}}<span class="visually-hidden">Email</span></a></li>
+        <li><a rel="me" href="https://github.com/wescran">{{template "icon-github"}}<span class="visually-hidden">GitHub</span></a></li>
+        <li><a rel="me atproto" href="https://bsky.app/profile/cranlab.ca">{{template "icon-bluesky"}}<span class="visually-hidden">Bluesky</span></a></li>
+        <li><a href="https://x.com/wescran">{{template "icon-twitter"}}<span class="visually-hidden">Twitter</span></a></li>
+      </ul>
+    </address>
+  </footer>
+</body>
+</html>

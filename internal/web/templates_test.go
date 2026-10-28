@@ -37,7 +37,8 @@ func TestTemplateFuncs(t *testing.T) {
 func TestParsePagesSharesTheLayout(t *testing.T) {
 	fsys := fstest.MapFS{
 		"templates/base.html":  {Data: []byte(`<title>{{.Title}}</title>{{block "main" .}}{{end}}`)},
-		"templates/home.html":  {Data: []byte(`{{define "main"}}home{{end}}`)},
+		"templates/icons.html": {Data: []byte(`{{define "icon-x"}}<svg/>{{end}}`)},
+		"templates/home.html":  {Data: []byte(`{{define "main"}}home{{template "icon-x"}}{{end}}`)},
 		"templates/about.html": {Data: []byte(`{{define "main"}}about{{end}}`)},
 		"templates/404.html":   {Data: []byte(`{{define "main"}}missing{{end}}`)},
 		"templates/503.html":   {Data: []byte(`{{define "main"}}down{{end}}`)},
@@ -46,7 +47,7 @@ func TestParsePagesSharesTheLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"home": "home", "about": "about", "404": "missing", "503": "down"} {
+	for name, want := range map[string]string{"home": "home<svg/>", "about": "about", "404": "missing", "503": "down"} {
 		tmpl := pages[name]
 		if tmpl == nil {
 			t.Errorf("no %q page", name)

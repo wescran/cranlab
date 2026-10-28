@@ -17,8 +17,9 @@ func templateFuncs(s *static) template.FuncMap {
 }
 
 // parsePages parses each page template ("home", "about", "404", "503")
-// together with base.html, so every page shares the layout and defines its
-// own "main" block. The result is keyed by page name.
+// together with base.html (the layout) and icons.html (the inline SVG icons,
+// as named templates), so every page shares them and defines its own "main"
+// block. The result is keyed by page name.
 func parsePages(fsys fs.FS, funcs template.FuncMap) (map[string]*template.Template, error) {
 	panic("not implemented")
 }

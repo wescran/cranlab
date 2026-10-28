@@ -1,1 +1,20 @@
-{{/* TODO: port layouts/home.html: the h-card (photo, name, intro from web/content/home.md, hidden u-email/u-url rel=me links). Latest article and notes come in Task 6. */}}
+{{- /* Home page (from Hugo's home.html). The latest article and notes are
+     added with the PDS reads. */ -}}
+{{define "main"}}
+  {{- /* h-card: IndieWeb identity */}}
+  <section class="h-card">
+    <a class="u-url u-uid" rel="me" href="{{.Config.SiteURL}}/">
+      <img class="u-photo" src="{{asset "images/profile-200.jpeg"}}" width="200" height="200" alt="Wesley Cranston">
+    </a>
+    <header>
+      <h1 class="p-name">Wesley Cranston</h1>
+      <p class="p-note">
+        Hello, world! Welcome to CranLab, my own personal presence on the internet and <a href="https://indieweb.org">IndieWeb</a>. I write about my current interests, my ongoing work on my homelab, and anything else that comes to mind. A proud Canadian and eternal Leafs fan! Stay curious!
+      </p>
+      {{- /* Machine-readable h-card properties, not shown; the visible links live in the footer */}}
+      <a rel="me" class="u-email u-url" href="mailto:wescran@cranlab.ca" hidden>wescran@cranlab.ca</a>
+      <a rel="me" class="u-url" href="https://github.com/wescran" hidden>wescran</a>
+      <a rel="me atproto" class="u-url" href="https://bsky.app/profile/cranlab.ca" hidden>cranlab.ca</a>
+    </header>
+  </section>
+{{end}}

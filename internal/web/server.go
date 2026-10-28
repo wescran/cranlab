@@ -26,8 +26,11 @@ type Page struct {
 	Title string
 	// Description fills <meta name="description">.
 	Description string
-	// Path is the request path, e.g. "/about".
+	// Path is the request path, e.g. "/about". The navigation marks the
+	// current section with it.
 	Path string
+	// Year is the current year (from Deps.Now), for the footer's copyright.
+	Year int
 	// Config gives templates the site settings (SiteURL, WebmentionDomain, …).
 	Config config.Config
 }
