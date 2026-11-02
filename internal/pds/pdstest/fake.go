@@ -6,7 +6,8 @@ package pdstest
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -32,7 +33,7 @@ type Server struct {
 
 type record struct {
 	cid   string
-	value json.RawMessage
+	value jsontext.Value
 }
 
 type blob struct {
@@ -57,11 +58,11 @@ func New(t testing.TB, did string) *Server {
 }
 
 // Put stores a record (value is marshalled to JSON, or used as-is if it is
-// a json.RawMessage or []byte) and returns its CID.
+// a jsontext.Value or []byte) and returns its CID.
 func (s *Server) Put(collection, rkey string, value any) string {
 	var raw []byte
 	switch v := value.(type) {
-	case json.RawMessage:
+	case jsontext.Value:
 		raw = v
 	case []byte:
 		raw = v
@@ -167,9 +168,9 @@ func (s *Server) listRecords(w http.ResponseWriter, r *http.Request) {
 		rkeys = rkeys[:limit]
 	}
 	type item struct {
-		URI   string          `json:"uri"`
-		CID   string          `json:"cid"`
-		Value json.RawMessage `json:"value"`
+		URI   string         `json:"uri"`
+		CID   string         `json:"cid"`
+		Value jsontext.Value `json:"value"`
 	}
 	out := struct {
 		Cursor  string `json:"cursor,omitempty"`
@@ -197,9 +198,9 @@ func (s *Server) getRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, struct {
-		URI   string          `json:"uri"`
-		CID   string          `json:"cid"`
-		Value json.RawMessage `json:"value"`
+		URI   string         `json:"uri"`
+		CID   string         `json:"cid"`
+		Value jsontext.Value `json:"value"`
 	}{s.uri(collection, rkey), rec.cid, rec.value})
 }
 
@@ -224,10 +225,10 @@ func (s *Server) uri(collection, rkey string) string {
 func xrpcError(w http.ResponseWriter, status int, name, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": name, "message": message})
+	_ = json.MarshalWrite(w, map[string]string{"error": name, "message": message})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.MarshalWrite(w, v)
 }

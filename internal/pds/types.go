@@ -1,6 +1,6 @@
 package pds
 
-import "encoding/json"
+import "encoding/json/jsontext"
 
 // Collections the site reads.
 const (
@@ -15,22 +15,22 @@ type Record[T any] struct {
 	Value T
 	// Raw is the record's value exactly as received, including fields the
 	// site doesn't know about.
-	Raw json.RawMessage
+	Raw jsontext.Value
 }
 
 // Document is a site.standard.document record (an article).
 type Document struct {
-	Site        string          `json:"site"`
-	Path        string          `json:"path"`
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	PublishedAt string          `json:"publishedAt"`
-	UpdatedAt   string          `json:"updatedAt"`
-	TextContent string          `json:"textContent"`
-	Tags        []string        `json:"tags"`
-	Content     json.RawMessage `json:"content"`
-	CoverImage  *Blob           `json:"coverImage"`
-	BskyPostRef *StrongRef      `json:"bskyPostRef"`
+	Site        string         `json:"site"`
+	Path        string         `json:"path"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	PublishedAt string         `json:"publishedAt"`
+	UpdatedAt   string         `json:"updatedAt"`
+	TextContent string         `json:"textContent"`
+	Tags        []string       `json:"tags"`
+	Content     jsontext.Value `json:"content"`
+	CoverImage  *Blob          `json:"coverImage"`
+	BskyPostRef *StrongRef     `json:"bskyPostRef"`
 }
 
 // Post is an app.bsky.feed.post record.
@@ -41,7 +41,7 @@ type Post struct {
 	Embed     *Embed   `json:"embed"`
 	Langs     []string `json:"langs"`
 	// Reply is set on replies; the site only needs to know whether it's there.
-	Reply json.RawMessage `json:"reply"`
+	Reply jsontext.Value `json:"reply"`
 }
 
 // Facet annotates a byte range of a post's UTF-8 text.

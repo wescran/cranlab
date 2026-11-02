@@ -2,7 +2,6 @@ package pds_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -64,7 +63,7 @@ func TestListDocumentsEmpty(t *testing.T) {
 func TestListDocumentsDecodes(t *testing.T) {
 	c, fake := newClient(t)
 	raw := `{"$type":"site.standard.document","site":"at://did:plc:ogl52fc2rdooori2ayf74can/site.standard.publication/3mxcsltpg2k26","path":"/articles/welcome","title":"Welcome","description":"Hi.","publishedAt":"2026-09-28T00:00:00.000Z","updatedAt":"2026-10-20T20:18:27.757Z","textContent":"Hello","tags":["writing"],"content":{"$type":"at.markpub.markdown","flavor":"gfm","text":{"$type":"at.markpub.text","markdown":"## Hello"}},"coverImage":{"$type":"blob","ref":{"$link":"bafkreicover"},"mimeType":"image/png","size":42},"bskyPostRef":{"uri":"at://did:plc:ogl52fc2rdooori2ayf74can/app.bsky.feed.post/3mydgsmc5ycfg","cid":"bafyreipost"},"com.example.extra":{"kept":true}}`
-	cid := fake.Put(pds.DocumentCollection, "3mydgsmc5ycfg", json.RawMessage(raw))
+	cid := fake.Put(pds.DocumentCollection, "3mydgsmc5ycfg", []byte(raw))
 
 	docs, err := c.ListDocuments(context.Background(), did)
 	if err != nil || len(docs) != 1 {
