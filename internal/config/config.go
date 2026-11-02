@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Config holds the server's settings. See the spec's "Configuration" table.
+// Config holds the server's settings.
 type Config struct {
 	ListenAddr       string // LISTEN_ADDR, e.g. 127.0.0.1:8080
 	SiteURL          string // SITE_URL, e.g. https://cranlab.ca
