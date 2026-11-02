@@ -2,36 +2,38 @@
 package web
 
 import (
+	"bytes"
 	"html/template"
+	"io/fs"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
+	site "github.com/wescran/cranlab/web"
 )
 
 // SiteTitle is the site's name, used in <title> and the RSS feed.
 const SiteTitle = "CranLab"
 
-// Deps are the server's collaborators. Later tasks add the PDS client and the
-// webmention client.
+// Deps are the server's collaborators.
 type Deps struct {
-	// Now returns the current time; tests pass a fixed clock. Nil means time.Now.
+	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
 }
 
 // Page is the data every page template receives.
 type Page struct {
-	// Title is the page's own title. Empty on the home page, whose <title> is
-	// just SiteTitle; other pages get "<Title> | CranLab".
+	// Title is the page's title; empty on the home page.
 	Title string
 	// Description fills <meta name="description">.
 	Description string
-	// Path is the request path, e.g. "/about". The navigation marks the
-	// current section with it.
+	// Path is the request path, used to mark the current navigation item.
 	Path string
-	// Year is the current year (from Deps.Now), for the footer's copyright.
+	// Year is the current year, for the footer.
 	Year int
-	// Config gives templates the site settings (SiteURL, WebmentionDomain, …).
+	// Config holds the site settings.
 	Config config.Config
 }
 
@@ -39,42 +41,112 @@ type server struct {
 	cfg    config.Config
 	deps   Deps
 	static *static
-	pages  map[string]*template.Template // by page name: "home", "about", "404", "503"
+	pages  map[string]*template.Template // keyed by page name
 	mux    *http.ServeMux
 }
 
-// New builds the site's handler, parsing every template up front so a broken
+// New returns the site's handler. Templates are parsed up front, so a broken
 // template fails at startup rather than on a request.
-//
-// Routes (Go 1.22 patterns):
-//   - GET /{$}             home page
-//   - GET /about           About page
-//   - GET /robots.txt      "User-agent: *" and "Allow: /", text/plain
-//   - GET /healthz         "ok" (moved here from main)
-//   - GET /static/{path...} embedded static files (see static)
-//   - GET /static          the 404 page. Without this exact pattern, the router
-//     redirects /static to /static/, which the trailing-slash rule redirects
-//     back: an endless loop.
-//   - GET / (catch-all)    the 404 page with status 404. Register it for GET
-//     only, so other methods get the router's automatic 405.
-//
-// Every path with a trailing slash except "/" gets a 301 to the same path
-// without it, keeping the query string ("/about/?x=1" → "/about?x=1").
-//
-// Pages are rendered into a buffer first and written only if rendering
-// succeeded, with Content-Type "text/html; charset=utf-8".
 func New(cfg config.Config, deps Deps) (http.Handler, error) {
-	panic("not implemented")
+	mux := http.NewServeMux()
+	staticFS, err := fs.Sub(site.FS, "static")
+	if err != nil {
+		return nil, err
+	}
+	staticHandler, err := newStatic(staticFS)
+	if err != nil {
+		return nil, err
+	}
+	pages, err := parsePages(site.FS, templateFuncs(staticHandler))
+	if err != nil {
+		return nil, err
+	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
+	s := &server{
+		cfg:    cfg,
+		deps:   deps,
+		static: staticHandler,
+		pages:  pages,
+		mux:    mux,
+	}
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		s.renderError(w, r, http.StatusNotFound)
+	})
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		s.render(w, r, "home", http.StatusOK, Page{
+			Description: "CranLab by Wesley Cranston",
+		})
+	})
+	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
+		s.render(w, r, "about", http.StatusOK, Page{
+			Description: "About Wesley Cranston",
+			Title:       "About Me",
+		})
+	})
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("User-agent: *\nAllow: /\n"))
+	})
+	// Without this exact route, the router redirects /static to /static/,
+	// which the trailing-slash redirect sends straight back.
+	mux.HandleFunc("GET /static", func(w http.ResponseWriter, r *http.Request) {
+		s.renderError(w, r, http.StatusNotFound)
+	})
+	mux.Handle("GET /static/{path...}", staticHandler)
+
+	return s, nil
 }
 
-// ServeHTTP redirects paths with a trailing slash (see New), then hands the
-// request to the router. New returns the *server itself as the handler.
+// ServeHTTP permanently redirects paths with a trailing slash to the same path
+// without it, then routes the request.
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	rPath := r.URL.Path
+	if strings.HasSuffix(rPath, "/") && rPath != "/" {
+		target := strings.TrimRight(rPath, "/")
+		query := r.URL.RawQuery
+		if query != "" {
+			target += "?" + query
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
+	s.mux.ServeHTTP(w, r)
 }
 
-// renderError writes the 404 or 503 page with that status. Later tasks use it
-// for missing records and an unreachable PDS.
+// renderError writes the 404 or 503 page with that status.
 func (s *server) renderError(w http.ResponseWriter, r *http.Request, status int) {
-	panic("not implemented")
+	switch status {
+	case http.StatusNotFound:
+		s.render(w, r, "404", http.StatusNotFound, Page{
+			Title: "Page Not Found",
+		})
+	case http.StatusServiceUnavailable:
+		s.render(w, r, "503", http.StatusServiceUnavailable, Page{
+			Title: "Temporarily unavailable",
+		})
+	}
+}
+
+// render executes a page template into a buffer and writes it only if that
+// succeeded, so a failure never sends a half-written page.
+func (s *server) render(w http.ResponseWriter, r *http.Request, name string, status int, p Page) {
+	p.Path = r.URL.Path
+	p.Config = s.cfg
+	p.Year = s.deps.Now().Year()
+
+	var buf bytes.Buffer
+	if err := s.pages[name].Execute(&buf, p); err != nil {
+		slog.Error("render", "page", name, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
 }

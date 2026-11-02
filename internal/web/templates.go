@@ -3,23 +3,34 @@ package web
 import (
 	"html/template"
 	"io/fs"
+	"time"
 )
 
-// templateFuncs are the helpers available in every template:
-//
-//   - asset "css/main.css" → the file's versioned URL (static.url); an unknown
-//     file makes rendering fail.
-//   - date t → "January 2, 2006" (in UTC).
-//   - datetime t → RFC 3339, e.g. "2026-09-28T00:00:00Z" (in UTC), for
-//     <time datetime=…> and dt-published.
+// templateFuncs returns the helpers available in templates: asset (a static
+// file's versioned URL), date ("January 2, 2006") and datetime (RFC 3339),
+// both in UTC.
 func templateFuncs(s *static) template.FuncMap {
-	panic("not implemented")
+	return template.FuncMap{
+		"asset": s.url,
+		"date": func(t time.Time) string {
+			return t.UTC().Format("January 2, 2006")
+		},
+		"datetime": func(t time.Time) string {
+			return t.UTC().Format(time.RFC3339)
+		},
+	}
 }
 
-// parsePages parses each page template ("home", "about", "404", "503")
-// together with base.html (the layout) and icons.html (the inline SVG icons,
-// as named templates), so every page shares them and defines its own "main"
-// block. The result is keyed by page name.
+// parsePages parses each page with the shared layout and icons, keyed by page
+// name. Each page needs its own set because every page defines "main".
 func parsePages(fsys fs.FS, funcs template.FuncMap) (map[string]*template.Template, error) {
-	panic("not implemented")
+	templateMap := make(map[string]*template.Template)
+	for _, pg := range []string{"home", "about", "404", "503"} {
+		t, err := template.New("base.html").Funcs(funcs).ParseFS(fsys, "templates/base.html", "templates/icons.html", "templates/"+pg+".html")
+		if err != nil {
+			return nil, err
+		}
+		templateMap[pg] = t
+	}
+	return templateMap, nil
 }

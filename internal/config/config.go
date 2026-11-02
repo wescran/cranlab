@@ -26,18 +26,9 @@ func validURL(raw string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// Load reads the configuration through getenv (os.Getenv in main, a map in
-// tests).
-//
-// Rules:
-//   - Every variable except APP_PASSWORD is required. A missing or blank one is
-//     an error naming the variable. Report every problem at once
-//     (errors.Join), not just the first.
-//   - Values are trimmed of surrounding whitespace.
-//   - SITE_URL, PDS_URL and PDS_PUBLIC_URL must be absolute http or https URLs
-//     with a host; a trailing slash is removed.
-//   - DID must start with "did:", and PUBLICATION_URI with "at://".
-//   - Error messages never include APP_PASSWORD's value.
+// Load reads and validates the configuration through getenv. Every variable
+// except APP_PASSWORD is required; all problems are reported together. URLs
+// lose any trailing slash.
 func Load(getenv func(string) string) (Config, error) {
 	var errs []error
 	// value returns a trimmed variable, recording an error if it's required and blank.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
+	"github.com/wescran/cranlab/internal/web"
 )
 
 func run() error {
@@ -22,18 +23,18 @@ func run() error {
 	if cfg.AppPassword == "" {
 		logger.Info("No APP_PASSWORD configured, syndication disabled")
 	}
-	mux := http.NewServeMux()
+	serverHandler, err := web.New(cfg, web.Deps{})
+	if err != nil {
+		return fmt.Errorf("server: %w", err)
+	}
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
-		Handler:           mux,
+		Handler:           serverHandler,
 	}
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprint(w, "ok")
-	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
