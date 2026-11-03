@@ -28,6 +28,7 @@ type Server struct {
 	blobs    map[string]blob              // cid → blob
 	failWith int
 	delay    time.Duration
+	noFinal  bool
 	requests []url.URL
 }
 
@@ -106,6 +107,14 @@ func (s *Server) Delay(d time.Duration) {
 	s.delay = d
 }
 
+// OmitFinalCursor makes listRecords leave out the cursor on the last page,
+// as the lexicon allows, instead of returning one and then an empty page.
+func (s *Server) OmitFinalCursor() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noFinal = true
+}
+
 // Requests returns the URLs requested so far, in order.
 func (s *Server) Requests() []url.URL {
 	s.mu.Lock()
@@ -164,9 +173,11 @@ func (s *Server) listRecords(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(rkeys)))
-	if len(rkeys) > limit {
+	more := len(rkeys) > limit
+	if more {
 		rkeys = rkeys[:limit]
 	}
+	omitFinal := s.noFinal
 	type item struct {
 		URI   string         `json:"uri"`
 		CID   string         `json:"cid"`
@@ -181,7 +192,7 @@ func (s *Server) listRecords(w http.ResponseWriter, r *http.Request) {
 		out.Records = append(out.Records, item{URI: s.uri(collection, rkey), CID: rec.cid, Value: rec.value})
 	}
 	s.mu.Unlock()
-	if len(rkeys) > 0 {
+	if len(rkeys) > 0 && (more || !omitFinal) {
 		out.Cursor = rkeys[len(rkeys)-1]
 	}
 	writeJSON(w, out)

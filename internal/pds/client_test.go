@@ -52,6 +52,23 @@ func TestListDocumentsFollowsCursor(t *testing.T) {
 	}
 }
 
+func TestListDocumentsStopsWithoutFinalCursor(t *testing.T) {
+	c, fake := newClient(t)
+	fake.OmitFinalCursor()
+	for i := range 150 {
+		fake.Put(pds.DocumentCollection, fmt.Sprintf("3mx%04d", i), map[string]any{"title": "x"})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	docs, err := c.ListDocuments(ctx, did)
+	if err != nil {
+		t.Fatalf("ListDocuments: %v (a PDS that omits the last cursor must not loop)", err)
+	}
+	if len(docs) != 150 || len(fake.Requests()) != 2 {
+		t.Errorf("got %d documents in %d requests, want 150 in 2", len(docs), len(fake.Requests()))
+	}
+}
+
 func TestListDocumentsEmpty(t *testing.T) {
 	c, _ := newClient(t)
 	docs, err := c.ListDocuments(context.Background(), did)

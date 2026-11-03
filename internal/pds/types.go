@@ -1,6 +1,9 @@
 package pds
 
-import "encoding/json/jsontext"
+import (
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+)
 
 // Collections the site reads.
 const (
@@ -133,20 +136,51 @@ type StrongRef struct {
 	CID string `json:"cid"`
 }
 
-// UnmarshalJSON decodes any embed type into the one Embed struct.
-//
-// The JSON shapes, by $type:
-//
-//	images:          {"$type", "images": [Image…]}
-//	external:        {"$type", "external": External}
-//	record:          {"$type", "record": StrongRef}
-//	recordWithMedia: {"$type", "record": {"$type": "…embed.record", "record": StrongRef},
-//	                  "media": <an images, video or external embed>}
-//	video:           {"$type", "video": Blob, "alt": "…"}
-//
-// Note that "record" means different things in record and recordWithMedia:
-// a strong ref in one, a whole record embed in the other. An unknown $type
-// sets only Type, with no error, so new embed types never break a page.
+// UnmarshalJSON decodes any embed type into Embed. "record" holds a strong
+// ref in a record embed but a whole record embed in recordWithMedia. Unknown
+// types set only Type.
 func (e *Embed) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	var raw struct {
+		Type     string         `json:"$type"`
+		Images   []Image        `json:"images"`
+		External *External      `json:"external"`
+		Record   jsontext.Value `json:"record"`
+		Media    *Embed         `json:"media"`
+		Alt      string         `json:"alt"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*e = Embed{Type: raw.Type}
+
+	switch raw.Type {
+	case EmbedImages:
+		e.Images = raw.Images
+	case EmbedExternal:
+		e.External = raw.External
+	case EmbedRecord:
+		if len(raw.Record) > 0 {
+			var ref StrongRef
+			if err := json.Unmarshal(raw.Record, &ref); err != nil {
+				return err
+			}
+			e.Quote = &ref
+		}
+	case EmbedRecordWithMedia:
+		if len(raw.Record) > 0 {
+			var emRec struct {
+				Record StrongRef `json:"record"`
+			}
+			if err := json.Unmarshal(raw.Record, &emRec); err != nil {
+				return err
+			}
+			e.Quote = &emRec.Record
+			e.Media = raw.Media
+		}
+	case EmbedVideo:
+		e.Video = &Video{Alt: raw.Alt}
+	}
+
+	return nil
 }
