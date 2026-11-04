@@ -59,6 +59,19 @@ func TestFacets(t *testing.T) {
 			`&lt;x&gt; <a href="https://e.com/?a=1&amp;b=&#34;2&#34;">link</a>`,
 		},
 		{
+			"escapes text inside a facet", "<img src=x onerror=alert(1)>",
+			[]pds.Facet{facet(0, 28, link("https://e.com"))},
+			`<a href="https://e.com">&lt;img src=x onerror=alert(1)&gt;</a>`,
+		},
+		{
+			"empty mention and tag stay text", "@nobody #",
+			[]pds.Facet{
+				facet(0, 7, pds.Feature{Type: featureMention}),
+				facet(8, 9, pds.Feature{Type: featureTag}),
+			},
+			"@nobody #",
+		},
+		{
 			"javascript: links stay text", "click me",
 			[]pds.Facet{facet(0, 8, link("javascript:alert(1)"))},
 			"click me",
