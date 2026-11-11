@@ -1,0 +1,6 @@
+{{define "main"}}
+  <h1>{{.Data.Tag}}</h1>
+  <section class="h-feed">
+    {{- range .Data.Articles}}{{template "article-summary" .}}{{end}}
+  </section>
+{{end}}

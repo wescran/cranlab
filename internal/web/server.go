@@ -3,7 +3,9 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
+	"github.com/wescran/cranlab/internal/pds"
 	site "github.com/wescran/cranlab/web"
 )
 
@@ -19,8 +22,18 @@ const SiteTitle = "CranLab"
 
 // Deps are the server's collaborators.
 type Deps struct {
+	// PDS is where content is read from.
+	PDS PDS
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
+}
+
+// PDS is what the site reads from the PDS (satisfied by *pds.Client).
+type PDS interface {
+	ListDocuments(ctx context.Context, did string) ([]pds.Record[pds.Document], error)
+	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
+	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
+	GetBlob(ctx context.Context, did, cid string) (io.ReadCloser, string, error)
 }
 
 // Page is the data every page template receives.
@@ -35,6 +48,8 @@ type Page struct {
 	Year int
 	// Config holds the site settings.
 	Config config.Config
+	// Data is the page's own content: one of the view types in views.go.
+	Data any
 }
 
 type server struct {
@@ -74,11 +89,7 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		s.render(w, r, "home", http.StatusOK, Page{
-			Description: "CranLab by Wesley Cranston",
-		})
-	})
+	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "about", http.StatusOK, Page{
 			Description: "About Wesley Cranston",
@@ -98,6 +109,13 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
 	mux.Handle("GET /static/{path...}", staticHandler)
+	mux.HandleFunc("GET /articles", s.articles)
+	mux.HandleFunc("GET /articles/{slug}", s.article)
+	mux.HandleFunc("GET /notes", s.notes)
+	mux.HandleFunc("GET /notes/{rkey}", s.note)
+	mux.HandleFunc("GET /tags", s.tags)
+	mux.HandleFunc("GET /tags/{tag}", s.tag)
+	mux.HandleFunc("GET /media/{cid}", s.media)
 
 	return s, nil
 }

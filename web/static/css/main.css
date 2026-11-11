@@ -722,3 +722,182 @@ article > hr {
   white-space: pre-line; /* keep the author's line breaks */
   overflow-wrap: anywhere;
 }
+
+/* =========================================================================
+   14. Article lists: summary line under each entry
+   ========================================================================= */
+
+.h-feed article > .p-summary {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* =========================================================================
+   15. Notes and post embeds
+   ========================================================================= */
+
+/* Notes are stacked blocks, not the one-line rows of article lists */
+.h-feed article.note,
+article.note {
+  display: block;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+article.note .e-content {
+  overflow-wrap: anywhere;
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.note-meta a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.note-meta a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.older {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.embed {
+  margin-top: 0.75rem;
+}
+
+.embed-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+}
+
+.embed-images img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+.embed-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.embed-card:hover {
+  border-color: var(--accent);
+}
+
+.embed-card img {
+  width: 6rem;
+  height: 6rem;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.embed-card > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.embed-card > span > span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.embed-quote,
+.embed-video {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+/* =========================================================================
+   16. Callouts (Obsidian "> [!type] Title" blocks in articles)
+   ========================================================================= */
+
+.callout {
+  --callout: var(--accent);
+  margin-block: 1.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--callout);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--callout) 8%, transparent);
+}
+
+.callout > :last-child {
+  margin-bottom: 0;
+}
+
+.callout-title {
+  margin-top: 0;
+  font-weight: 600;
+  color: var(--callout);
+}
+
+.callout-tip,
+.callout-success,
+.callout-check,
+.callout-done {
+  --callout: #1a8754;
+}
+
+.callout-warning,
+.callout-caution,
+.callout-attention,
+.callout-question,
+.callout-help,
+.callout-faq {
+  --callout: #b26a00;
+}
+
+.callout-danger,
+.callout-error,
+.callout-bug,
+.callout-failure,
+.callout-fail {
+  --callout: var(--rule);
+}
+
+@media (prefers-color-scheme: dark) {
+  .callout-tip,
+  .callout-success,
+  .callout-check,
+  .callout-done {
+    --callout: #4cc38a;
+  }
+
+  .callout-warning,
+  .callout-caution,
+  .callout-attention,
+  .callout-question,
+  .callout-help,
+  .callout-faq {
+    --callout: #ffb900;
+  }
+}
+
+/* Images in article bodies never overflow the column */
+.e-content img {
+  max-width: 100%;
+  height: auto;
+}

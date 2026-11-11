@@ -1,0 +1,56 @@
+{{- /* Pieces shared by several pages. */ -}}
+
+{{define "tags" -}}
+{{with .}}<ul class="tags">
+  {{- range .}}
+  <li><a class="p-category" href="{{.URL}}">{{.Name}}</a></li>
+  {{- end}}
+</ul>{{end}}
+{{- end}}
+
+{{define "article-summary"}}
+<article class="h-entry">
+  <time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>
+  <a class="p-name u-url" href="{{.URL}}">{{.Title}}</a>
+  {{template "tags" .Tags}}
+  {{with .Description}}<p class="p-summary">{{.}}</p>{{end}}
+</article>
+{{end}}
+
+{{define "note"}}
+<article class="h-entry note">
+  <div class="e-content">{{.Text}}</div>
+  {{with .Embed}}{{template "embed" .}}{{end}}
+  <p class="note-meta">
+    <a class="u-url" href="{{.URL}}"><time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time></a>
+    <a class="u-syndication" href="{{.BlueskyURL}}">View on Bluesky</a>
+  </p>
+</article>
+{{end}}
+
+{{define "embed"}}
+<div class="embed">
+  {{- with .Images}}
+  <div class="embed-images">
+    {{- range .}}
+    <a href="{{.URL}}"><img src="{{.URL}}" alt="{{.Alt}}"{{if and .Width .Height}} width="{{.Width}}" height="{{.Height}}"{{end}} loading="lazy" decoding="async"></a>
+    {{- end}}
+  </div>
+  {{- end}}
+  {{- with .External}}
+  <a class="embed-card" href="{{.URL}}">
+    {{- with .ThumbURL}}<img src="{{.}}" alt="" loading="lazy" decoding="async">{{end}}
+    <span>
+      <strong>{{.Title}}</strong>
+      {{- with .Description}}<span>{{.}}</span>{{end}}
+    </span>
+  </a>
+  {{- end}}
+  {{- with .QuoteURL}}
+  <p class="embed-quote"><a href="{{.}}">Quoted post on Bluesky</a></p>
+  {{- end}}
+  {{- with .VideoURL}}
+  <p class="embed-video"><a href="{{.}}">Watch the video on Bluesky</a>{{with $.VideoAlt}}: {{.}}{{end}}</p>
+  {{- end}}
+</div>
+{{end}}

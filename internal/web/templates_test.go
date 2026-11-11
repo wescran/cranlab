@@ -36,18 +36,28 @@ func TestTemplateFuncs(t *testing.T) {
 
 func TestParsePagesSharesTheLayout(t *testing.T) {
 	fsys := fstest.MapFS{
-		"templates/base.html":  {Data: []byte(`<title>{{.Title}}</title>{{block "main" .}}{{end}}`)},
-		"templates/icons.html": {Data: []byte(`{{define "icon-x"}}<svg/>{{end}}`)},
-		"templates/home.html":  {Data: []byte(`{{define "main"}}home{{template "icon-x"}}{{end}}`)},
-		"templates/about.html": {Data: []byte(`{{define "main"}}about{{end}}`)},
-		"templates/404.html":   {Data: []byte(`{{define "main"}}missing{{end}}`)},
-		"templates/503.html":   {Data: []byte(`{{define "main"}}down{{end}}`)},
+		"templates/base.html":     {Data: []byte(`<title>{{.Title}}</title>{{block "main" .}}{{end}}`)},
+		"templates/icons.html":    {Data: []byte(`{{define "icon-x"}}<svg/>{{end}}`)},
+		"templates/home.html":     {Data: []byte(`{{define "main"}}home{{template "icon-x"}}{{end}}`)},
+		"templates/about.html":    {Data: []byte(`{{define "main"}}about{{end}}`)},
+		"templates/404.html":      {Data: []byte(`{{define "main"}}missing{{end}}`)},
+		"templates/503.html":      {Data: []byte(`{{define "main"}}down{{end}}`)},
+		"templates/partials.html": {Data: []byte(`{{define "partial-x"}}shared{{end}}`)},
+		"templates/articles.html": {Data: []byte(`{{define "main"}}{{template "partial-x"}}{{end}}`)},
+		"templates/article.html":  {Data: []byte(`{{define "main"}}article{{end}}`)},
+		"templates/notes.html":    {Data: []byte(`{{define "main"}}notes{{end}}`)},
+		"templates/note.html":     {Data: []byte(`{{define "main"}}note{{end}}`)},
+		"templates/tags.html":     {Data: []byte(`{{define "main"}}tags{{end}}`)},
+		"templates/tag.html":      {Data: []byte(`{{define "main"}}tag{{end}}`)},
 	}
 	pages, err := parsePages(fsys, templateFuncs(&static{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"home": "home<svg/>", "about": "about", "404": "missing", "503": "down"} {
+	for name, want := range map[string]string{
+		"home": "home<svg/>", "about": "about", "404": "missing", "503": "down",
+		"articles": "shared", "article": "article", "notes": "notes", "note": "note", "tags": "tags", "tag": "tag",
+	} {
 		tmpl := pages[name]
 		if tmpl == nil {
 			t.Errorf("no %q page", name)

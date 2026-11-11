@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"willnorris.com/go/microformats"
 
@@ -31,11 +30,7 @@ func testConfig() config.Config {
 
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
-	h, err := New(testConfig(), Deps{Now: func() time.Time { return time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC) }})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	return h
+	return newFixture(t).handler
 }
 
 func get(t *testing.T, h http.Handler, target string) *httptest.ResponseRecorder {

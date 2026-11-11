@@ -15,4 +15,28 @@
       <a rel="me atproto" class="u-url" href="https://bsky.app/profile/cranlab.ca" hidden>cranlab.ca</a>
     </header>
   </section>
+
+  {{- with .Data.Latest}}
+  <section class="latest">
+    <h2>Latest Article</h2>
+    <article class="h-entry">
+      <h3 class="p-name"><a class="u-url" href="{{.URL}}">{{.Title}}</a></h3>
+      <p class="byline">
+        <time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>
+        <span>{{.ReadingTime}} min read</span>
+      </p>
+      {{with .Description}}<p class="p-summary">{{.}}</p>{{end}}
+    </article>
+  </section>
+  {{- end}}
+
+  {{- with .Data.Notes}}
+  <section class="latest">
+    <h2>Recent Notes</h2>
+    <div class="h-feed notes">
+      {{- range .}}{{template "note" .}}{{end}}
+    </div>
+    <p><a href="/notes">All notes</a></p>
+  </section>
+  {{- end}}
 {{end}}
