@@ -2,11 +2,19 @@
 package render
 
 import (
+	"bytes"
+	"encoding/json/v2"
 	"html/template"
+	"net/url"
+	"strings"
 
+	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"github.com/wescran/cranlab/internal/pds"
 )
@@ -20,40 +28,96 @@ type Options struct {
 	PDSPublicURL string
 }
 
-// ArticleBody renders a document's content as HTML.
-//
-// at.markpub.markdown content is GFM, rendered with goldmark. Raw HTML is
-// kept (only the site owner's records are rendered), callouts become styled
-// boxes, and the owner's getBlob image and link URLs become /media/<cid>.
-// Any other content type falls back to the document's textContent, escaped,
-// one paragraph per blank-line-separated block.
-//
-// Steps:
-//   - Decode doc.Content's "$type" and "text"."markdown". Empty, undecodable
-//     or another $type: the textContent fallback.
-//   - goldmark.New with extension.GFM and the callouts extension, the
-//     blobRewriter as an AST transformer (parser.WithASTTransformers with
-//     util.Prioritized), and html.WithUnsafe() so raw HTML is kept.
-//   - Convert into a bytes.Buffer.
+// textFallback renders text as escaped paragraphs, one per blank-line-separated
+// block.
+func textFallback(text string) string {
+	split := strings.Split(text, "\n\n")
+	result := make([]string, len(split))
+	for _, block := range split {
+		newBlock := strings.TrimSpace(block)
+		if newBlock == "" {
+			continue
+		}
+		newBlock = "<p>" + template.HTMLEscapeString(newBlock) + "</p>\n"
+		result = append(result, newBlock)
+	}
+	return strings.Join(result, "")
+}
+
+// ArticleBody renders a document's content as HTML. at.markpub.markdown
+// content is rendered as GFM with raw HTML kept (only the owner's records are
+// rendered), callouts, and the owner's blob URLs pointed at /media. Any other
+// content falls back to the escaped textContent.
 func ArticleBody(doc pds.Document, o Options) (template.HTML, error) {
-	panic("not implemented")
+	var content struct {
+		Type string `json:"$type"`
+		Text struct {
+			Markdown string `json:"markdown"`
+		} `json:"text"`
+	}
+
+	if len(doc.Content) == 0 {
+		return template.HTML(textFallback(doc.TextContent)), nil
+	}
+
+	if err := json.Unmarshal(doc.Content, &content); err != nil {
+		return template.HTML(textFallback(doc.TextContent)), nil
+	}
+
+	if content.Type != "at.markpub.markdown" {
+		return template.HTML(textFallback(doc.TextContent)), nil
+	}
+
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM, callouts{}),
+		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(blobRewriter{o}, 100))),
+		goldmark.WithRendererOptions(html.WithUnsafe()),
+	)
+
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(content.Text.Markdown), &buf); err != nil {
+		return template.HTML(""), err
+	}
+	return template.HTML(buf.String()), nil
 }
 
 // blobRewriter points the owner's getBlob URLs in images and links at
 // /media/<cid>.
 type blobRewriter struct{ o Options }
 
-// Transform walks the document (ast.Walk), rewriting the Destination of every
-// *ast.Image and *ast.Link.
+// Transform rewrites the destinations of images and links.
 func (r blobRewriter) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
-	panic("not implemented")
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *ast.Image:
+			n.Destination = r.rewrite(n.Destination)
+		case *ast.Link:
+			n.Destination = r.rewrite(n.Destination)
+		}
+		return ast.WalkContinue, nil
+	})
 }
 
-// rewrite returns /media/<cid> for
-// <PDSPublicURL>/xrpc/com.atproto.sync.getBlob?did=<DID>&cid=<cid> (same
-// scheme and host as PDSPublicURL, that exact path, the owner's DID, a
-// non-empty cid; the query may be in any order and escaped), and dest
-// unchanged otherwise.
+// rewrite returns /media/<cid> for a getBlob URL of the owner's on their PDS,
+// and dest unchanged otherwise.
 func (r blobRewriter) rewrite(dest []byte) []byte {
-	panic("not implemented")
+	u, err := url.Parse(string(dest))
+	if err != nil {
+		return dest
+	}
+	base, err := url.Parse(r.o.PDSPublicURL)
+	if err != nil {
+		return dest
+	}
+	if u.Scheme != base.Scheme || u.Host != base.Host || u.Path != "/xrpc/com.atproto.sync.getBlob" {
+		return dest
+	}
+	q := u.Query()
+	if q.Get("did") != r.o.DID || q.Get("cid") == "" {
+		return dest
+	}
+	return []byte(mediaURL(q.Get("cid")))
 }

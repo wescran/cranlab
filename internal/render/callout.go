@@ -1,7 +1,9 @@
 package render
 
 import (
+	"bytes"
 	"regexp"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -42,35 +44,71 @@ func (callouts) Extend(m goldmark.Markdown) {
 	m.Renderer().AddOptions(renderer.WithNodeRenderers(util.Prioritized(calloutRenderer{}, 100)))
 }
 
+// calloutMarker matches a callout's first line: [!type], an optional + or -
+// (foldable), and an optional title.
 var calloutMarker = regexp.MustCompile(`^\[!([A-Za-z][\w-]*)\][+-]?(?:[ \t]+(.*))?$`)
 
 type calloutTransformer struct{}
 
 // Transform replaces each blockquote whose first line is a callout marker
-// with a Callout holding the blockquote's other contents.
-//
-//   - Collect the blockquotes first (ast.Walk), then change them: editing the
-//     tree while walking it skips nodes.
-//   - The marker is on the first line of the blockquote's first child, which
-//     must be a paragraph. Read that line from the source:
-//     para.Lines().At(0).Value(reader.Source()), without its newline, and
-//     match it against calloutMarker. "[!NOTE]- Title" gives type "note" and
-//     title "Title"; a "+" or "-" after "]" (a foldable callout) is ignored.
-//   - Without a title, use the type with its first letter upper-cased.
-//   - Remove the marker line from the paragraph (dropFirstLine), and the
-//     paragraph itself if nothing is left.
-//   - Move the blockquote's remaining children into the Callout, in order, and
-//     put the Callout where the blockquote was (ReplaceChild on its parent).
-//     Callouts can be nested in lists, so use the blockquote's own parent.
+// with a Callout holding the rest of its contents. Blockquotes are collected
+// before any are changed, because editing the tree while walking it skips
+// nodes.
 func (calloutTransformer) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
-	panic("not implemented")
+	var blockQuotes []*ast.Blockquote
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if bq, ok := n.(*ast.Blockquote); ok {
+			blockQuotes = append(blockQuotes, bq)
+		}
+		return ast.WalkContinue, nil
+	})
+	for _, bq := range blockQuotes {
+		para, ok := bq.FirstChild().(*ast.Paragraph)
+		if !ok || para.Lines().Len() == 0 {
+			continue
+		}
+		first := para.Lines().At(0)
+		line := first.Value(reader.Source())
+		line = bytes.TrimRight(line, "\r\n")
+		matches := calloutMarker.FindSubmatch(line)
+		if matches == nil {
+			continue
+		}
+		variant, title := strings.ToLower(string(matches[1])), string(matches[2])
+		if title == "" {
+			title = strings.ToUpper(variant[:1]) + variant[1:]
+		}
+		c := &Callout{
+			Variant: variant,
+			Title:   title,
+		}
+		dropFirstLine(para)
+		if para.ChildCount() == 0 {
+			bq.RemoveChild(bq, para)
+		}
+		for child := bq.FirstChild(); child != nil; {
+			next := child.NextSibling()
+			c.AppendChild(c, child)
+			child = next
+		}
+		bq.Parent().ReplaceChild(bq.Parent(), bq, c)
+	}
 }
 
 // dropFirstLine removes a paragraph's inline nodes up to and including the
-// end of its first line: the first *ast.Text whose SoftLineBreak() or
-// HardLineBreak() is true. (The marker may be split across several nodes.)
+// end of its first line. The marker may span several text nodes.
 func dropFirstLine(para *ast.Paragraph) {
-	panic("not implemented")
+	for n := para.FirstChild(); n != nil; {
+		next := n.NextSibling()
+		para.RemoveChild(para, n)
+		if t, ok := n.(*ast.Text); ok && (t.SoftLineBreak() || t.HardLineBreak()) {
+			return
+		}
+		n = next
+	}
 }
 
 type calloutRenderer struct{}
@@ -79,15 +117,15 @@ func (calloutRenderer) RegisterFuncs(r renderer.NodeRendererFuncRegisterer) {
 	r.Register(KindCallout, renderCallout)
 }
 
-// renderCallout writes, escaping the variant and title (util.EscapeHTML):
-//
-//	<div class="callout callout-<variant>">
-//	<p class="callout-title">Title</p>
-//	…children (goldmark renders them between entering and leaving)…
-//	</div>
-//
-// goldmark calls it twice per node: with entering true (write the opening
-// tags) and false (write the closing tag).
+// renderCallout writes a callout as
+// <div class="callout callout-<variant>"><p class="callout-title">…</p>…</div>.
 func renderCallout(w util.BufWriter, _ []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
-	panic("not implemented")
+	c := n.(*Callout)
+	if entering {
+		_, _ = w.WriteString(`<div class="callout callout-` + string(util.EscapeHTML([]byte(c.Variant))) + `">` + "\n")
+		_, _ = w.WriteString(`<p class="callout-title">` + string(util.EscapeHTML([]byte(c.Title))) + "</p>\n")
+	} else {
+		_, _ = w.WriteString("</div>\n")
+	}
+	return ast.WalkContinue, nil
 }
