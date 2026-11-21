@@ -15,17 +15,18 @@ import (
 	"github.com/wescran/cranlab/internal/store"
 	"github.com/wescran/cranlab/internal/syndicate"
 	"github.com/wescran/cranlab/internal/web"
+	"github.com/wescran/cranlab/internal/webmention"
 )
 
 // siteHandler opens the disposable read model and attempts one complete backfill.
 // An upstream outage is not a reason to stop serving the last good snapshot.
-func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), error) {
+func siteHandler(ctx context.Context, cfg config.Config, interactions web.InteractionReader) (http.Handler, func(), error) {
 	db, err := store.Open(cfg.CacheDBPath, cfg.DID, cfg.PublicationURI, cfg.SiteURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open cache: %w", err)
 	}
 	client := pds.New(cfg.PDSURL, nil)
-	h, err := web.New(cfg, web.Deps{Store: db, Blobs: client})
+	h, err := web.New(cfg, web.Deps{Store: db, Blobs: client, Interactions: interactions})
 	if err != nil {
 		db.Close()
 		return nil, nil, err
@@ -67,7 +68,7 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	serverHandler, stopSite, err := siteHandler(ctx, cfg)
+	serverHandler, stopSite, err := siteHandler(ctx, cfg, webmention.New("https://webmention.io", http.DefaultClient))
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}

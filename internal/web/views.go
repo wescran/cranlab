@@ -37,7 +37,8 @@ type ArticleSummary struct {
 // ArticlePage is one article.
 type ArticlePage struct {
 	ArticleSummary
-	Body template.HTML
+	Body         template.HTML
+	Interactions []interactionGroup
 	// SyndicationURL is the announcement post on bsky.app, or "".
 	SyndicationURL string
 }
@@ -57,8 +58,9 @@ type NoteView struct {
 	Published *time.Time
 	Embed     *render.Embed
 	// BlueskyURL is the post on bsky.app.
-	BlueskyURL string
-	AuthorURL  string
+	BlueskyURL   string
+	AuthorURL    string
+	Interactions []interactionGroup // populated only on the detail page
 }
 
 // TagsPage lists every tag.

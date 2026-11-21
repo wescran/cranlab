@@ -22,7 +22,7 @@ func TestStartupRepairsOnlyWithPassword(t *testing.T) {
 			}
 			fake.Put(pds.DocumentCollection, "post", pds.Document{Type: pds.DocumentCollection, Site: cfg.PublicationURI, Title: "Archived", Path: "/articles/archive"})
 			fake.Put(pds.PostCollection, "post", jsontext.Value(`{"$type":"app.bsky.feed.post","embed":{"$type":"app.bsky.embed.external","external":{"uri":"https://example.invalid/articles/archive"}}}`))
-			h, stop, err := siteHandler(t.Context(), cfg)
+			h, stop, err := siteHandler(t.Context(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
