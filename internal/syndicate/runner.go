@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -115,7 +114,7 @@ func (r *run) announce(ctx context.Context, a content.Article, key string, allow
 	if err != nil && !absent {
 		return errors.New("Announcement lookup failed")
 	}
-	canonical := r.origin + content.ArticlePrefix + url.PathEscape(a.Slug)
+	canonical := r.origin + a.PermalinkPath()
 	if !absent && !verifiedPost(post, "at://"+r.did+"/"+pds.PostCollection+"/"+key, canonical) {
 		return errors.New("conflicting post")
 	}

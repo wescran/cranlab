@@ -29,6 +29,9 @@ type Article struct {
 	Published time.Time
 }
 
+// PermalinkPath is the public path of this Article, with its slug escaped as one segment.
+func (a Article) PermalinkPath() string { return ArticlePrefix + url.PathEscape(a.Slug) }
+
 // Articles projects the owner's documents from a validated PDS listing. It selects those
 // whose Site is publication and whose Path is "/articles/<slug>" with a
 // non-empty slug and no further "/". They're sorted newest first by

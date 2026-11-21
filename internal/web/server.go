@@ -3,6 +3,7 @@ package web
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -65,15 +66,15 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux := http.NewServeMux()
 	staticFS, err := fs.Sub(site.FS, "static")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open embedded static directory: %w", err)
 	}
 	staticHandler, err := newStatic(staticFS)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize static assets: %w", err)
 	}
 	pages, err := parsePages(site.FS, templateFuncs(staticHandler))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse page templates: %w", err)
 	}
 	if deps.Now == nil {
 		deps.Now = time.Now

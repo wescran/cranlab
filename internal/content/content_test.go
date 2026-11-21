@@ -62,6 +62,13 @@ func TestArticlesTieBreak(t *testing.T) {
 	}
 }
 
+func TestArticlePermalinkPath(t *testing.T) {
+	a := Article{Slug: "café #1%"}
+	if got := a.PermalinkPath(); got != "/articles/caf%C3%A9%20%231%25" {
+		t.Errorf("unexpected permalink path: %s", got)
+	}
+}
+
 func TestFindArticle(t *testing.T) {
 	articles := Articles([]pds.Record[pds.Document]{doc("3mw", "/articles/welcome", "2026-09-28T00:00:00Z")}, publication)
 	if a, ok := FindArticle(articles, "welcome"); !ok || a.Slug != "welcome" {

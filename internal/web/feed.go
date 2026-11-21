@@ -3,9 +3,7 @@ package web
 import (
 	"encoding/xml"
 	"net/http"
-	"net/url"
 
-	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/render"
 )
 
@@ -38,7 +36,7 @@ func (s *server) feed(w http.ResponseWriter, r *http.Request) {
 	}
 	channel := rssChannel{Title: SiteTitle, Link: s.cfg.SiteURL + "/", Description: "Articles by Wesley Cranston"}
 	for _, a := range articles {
-		link := s.cfg.SiteURL + content.ArticlePrefix + url.PathEscape(a.Slug)
+		link := s.cfg.SiteURL + a.PermalinkPath()
 		item := rssItem{Title: a.Title, Link: link, GUID: link, Description: a.Description}
 		if item.Description == "" {
 			item.Description = render.FirstCharacters(a.TextContent, 300)

@@ -3,7 +3,15 @@ package render
 import (
 	"testing"
 
+	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
+)
+
+// Facet feature types.
+const (
+	featureLink    = "app.bsky.richtext.facet#link"
+	featureMention = "app.bsky.richtext.facet#mention"
+	featureTag     = "app.bsky.richtext.facet#tag"
 )
 
 func facet(start, end int, feature pds.Feature) pds.Facet {
@@ -99,7 +107,7 @@ func TestFacets(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := string(Facets(tt.text, tt.facets)); got != tt.want {
+			if got := string(Facets(tt.text, content.ProjectFacets(tt.facets))); got != tt.want {
 				t.Errorf("Facets =\n  %s\nwant\n  %s", got, tt.want)
 			}
 		})
