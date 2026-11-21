@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
@@ -25,7 +26,7 @@ func TestAuthenticatedErrorsAreLoggedWithoutSecrets(t *testing.T) {
 			}
 			f.Respond(method, "", 400, `{"error":"InvalidRequest","message":"fixture-password fixture-access-token fixture-refresh-token"}`)
 			var logs bytes.Buffer
-			syndicate.New(source, pds.New(f.URL, nil), did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil))).Run(t.Context())
+			syndicate.New(source, pds.New(f.URL, nil), did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil)), time.Now).Run(t.Context())
 			logins := 0
 			for _, req := range f.Requests() {
 				if req.Path == "/xrpc/com.atproto.server.createSession" {

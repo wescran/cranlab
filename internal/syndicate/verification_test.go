@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/pds/pdstest"
@@ -56,7 +57,7 @@ func TestOnlyVerifiedUnclaimedAnnouncementPermitsLogin(t *testing.T) {
 				source = append(source, articles{{URI: docURI + "2", Slug: "other", AnnouncementURI: postURI}}...)
 			}
 			var logs bytes.Buffer
-			syndicate.New(source, c, did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil))).Run(t.Context())
+			syndicate.New(source, c, did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil)), time.Now).Run(t.Context())
 			for _, u := range f.Requests() {
 				if u.Path != "/xrpc/com.atproto.repo.getRecord" {
 					t.Fatalf("unexpected request: %s", u.Path)

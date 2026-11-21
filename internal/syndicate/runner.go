@@ -1,13 +1,17 @@
-// Package syndicate links Articles to verified Announcements. It never runs
+// Package syndicate creates Announcements and repairs missing Article links. It never runs
 // from a page request; the syncer calls Run after a successful refresh.
 package syndicate
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
 	"net/url"
+	"slices"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
@@ -20,15 +24,18 @@ type ArticleSource interface {
 	Articles(context.Context) ([]content.Article, error)
 }
 
-// Client uses public reads to verify a repair before acquiring a session.
+// Client uses public reads to verify a creation or repair before acquiring a session.
 type Client interface {
 	GetPost(context.Context, string, string) (pds.Record[pds.Post], error)
 	GetDocument(context.Context, string, string) (pds.Record[pds.Document], error)
 	CreateSession(context.Context, string, string) (string, error)
+	UploadBlob(context.Context, string, string, []byte) (pds.Blob, error)
+	CreatePost(context.Context, string, string, string, map[string]any) (pds.StrongRef, error)
 	LinkDocument(context.Context, string, string, string, pds.Record[pds.Document], pds.StrongRef) error
 }
 
 type Runner struct {
+	now                                func() time.Time
 	mu                                 sync.Mutex
 	source                             ArticleSource
 	client                             Client
@@ -36,8 +43,15 @@ type Runner struct {
 	logger                             *slog.Logger
 }
 
-func New(source ArticleSource, client Client, did, publication, origin, password string, logger *slog.Logger) *Runner {
-	return &Runner{source: source, client: client, did: did, publication: publication, origin: origin, password: password, logger: logger}
+func New(source ArticleSource, client Client, did, publication, origin, password string, logger *slog.Logger, now func() time.Time) *Runner {
+	return &Runner{now: now, source: source, client: client, did: did, publication: publication, origin: origin, password: password, logger: logger}
+}
+
+type run struct {
+	*Runner
+	at        time.Time
+	token     string
+	remaining int
 }
 
 func (r *Runner) Run(ctx context.Context) {
@@ -57,7 +71,11 @@ func (r *Runner) Run(ctx context.Context) {
 			claimed[a.AnnouncementURI] = true
 		}
 	}
-	token := ""
+	batch := run{Runner: r, at: r.now(), remaining: 3}
+	articles = slices.Clone(articles)
+	slices.SortFunc(articles, func(a, b content.Article) int {
+		return cmp.Or(a.Published.Compare(b.Published), strings.Compare(a.URI, b.URI))
+	})
 	for _, a := range articles {
 		if ctx.Err() != nil {
 			return
@@ -74,10 +92,10 @@ func (r *Runner) Run(ctx context.Context) {
 			r.logger.Warn("syndication: Announcement already linked to another Article", "key", key)
 			continue
 		}
-		err := r.repair(ctx, a, key, &token)
+		err := batch.announce(ctx, a, key, batch.remaining > 0)
 		if errors.Is(err, pds.ErrSwapConflict) {
 			// Bound the retry, and re-verify both records against fresh state.
-			err = r.repair(ctx, a, key, &token)
+			err = batch.announce(ctx, a, key, false)
 		}
 		if err != nil {
 			r.logger.Warn("syndication: review Article", "key", key, "reason", err)
@@ -88,15 +106,17 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
-func (r *Runner) repair(ctx context.Context, a content.Article, key string, token *string) error {
+func (r *run) announce(ctx context.Context, a content.Article, key string, allowCreate bool) error {
 	post, err := r.client.GetPost(ctx, r.did, key)
-	if errors.Is(err, pds.ErrNotFound) {
+	absent := errors.Is(err, pds.ErrNotFound)
+	if absent && (!allowCreate || !a.HasPublished || !eligible(a.Published, r.at)) {
 		return nil
 	}
-	if err != nil {
+	if err != nil && !absent {
 		return errors.New("Announcement lookup failed")
 	}
-	if !verifiedPost(post, "at://"+r.did+"/"+pds.PostCollection+"/"+key, r.origin+content.ArticlePrefix+url.PathEscape(a.Slug)) {
+	canonical := r.origin + content.ArticlePrefix + url.PathEscape(a.Slug)
+	if !absent && !verifiedPost(post, "at://"+r.did+"/"+pds.PostCollection+"/"+key, canonical) {
 		return errors.New("conflicting post")
 	}
 	doc, err := r.client.GetDocument(ctx, r.did, key)
@@ -107,18 +127,31 @@ func (r *Runner) repair(ctx context.Context, a content.Article, key string, toke
 		return errors.New("Article identity changed")
 	}
 	if ref := doc.Value.BskyPostRef; ref != nil {
-		if ref.URI != post.URI || ref.CID == "" {
+		if absent || ref.URI != post.URI || ref.CID == "" {
 			return errors.New("Article has a conflicting Announcement link")
 		}
 		return nil
 	}
-	if *token == "" {
-		*token, err = r.client.CreateSession(ctx, r.did, r.password)
+	if absent {
+		date, err := time.Parse(time.RFC3339, doc.Value.PublishedAt)
+		if err != nil || !eligible(date, r.at) {
+			return nil
+		}
+	}
+	if r.token == "" {
+		r.token, err = r.client.CreateSession(ctx, r.did, r.password)
 		if err != nil {
 			return errLogin
 		}
 	}
-	if err := r.client.LinkDocument(ctx, *token, r.did, key, doc, pds.StrongRef{URI: post.URI, CID: post.CID}); err != nil {
+	ref := pds.StrongRef{URI: post.URI, CID: post.CID}
+	if absent {
+		ref, err = r.create(ctx, key, doc.Value, canonical)
+		if err != nil {
+			return err
+		}
+	}
+	if err := r.client.LinkDocument(ctx, r.token, r.did, key, doc, ref); err != nil {
 		if errors.Is(err, pds.ErrSwapConflict) {
 			return pds.ErrSwapConflict
 		}

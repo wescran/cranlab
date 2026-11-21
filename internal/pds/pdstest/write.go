@@ -1,8 +1,11 @@
 package pdstest
 
 import (
+	"crypto/sha256"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -21,6 +24,48 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]string{"did": s.DID, "accessJwt": AccessJWT, "refreshJwt": "fixture-refresh-token"})
 }
+
+func (s *Server) uploadBlob(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+AccessJWT {
+		xrpcError(w, 401, "AuthenticationRequired", "invalid token")
+		return
+	}
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		xrpcError(w, 400, "InvalidRequest", "invalid upload")
+		return
+	}
+	cid := fmt.Sprintf("bafkrei%x", sha256.Sum256(data))
+	mime := r.Header.Get("Content-Type")
+	s.PutBlob(cid, mime, data)
+	writeJSON(w, map[string]any{"blob": map[string]any{"$type": "blob", "ref": map[string]string{"$link": cid}, "mimeType": mime, "size": len(data)}})
+}
+
+func (s *Server) createRecord(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+AccessJWT {
+		xrpcError(w, 401, "AuthenticationRequired", "invalid token")
+		return
+	}
+	var in struct {
+		Repo       string         `json:"repo"`
+		Collection string         `json:"collection"`
+		RKey       string         `json:"rkey"`
+		Record     jsontext.Value `json:"record"`
+	}
+	if json.UnmarshalRead(r.Body, &in) != nil || in.Repo != s.DID || in.Collection == "" || in.RKey == "" || in.Record.Kind() != '{' {
+		xrpcError(w, 400, "InvalidRequest", "expected create")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.records[in.Collection][in.RKey]; exists {
+		xrpcError(w, 400, "InvalidRequest", "record already exists")
+		return
+	}
+	cid := s.putLocked(in.Collection, in.RKey, in.Record)
+	writeJSON(w, map[string]string{"uri": s.uri(in.Collection, in.RKey), "cid": cid})
+}
+
 func (s *Server) putRecord(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+AccessJWT {
 		xrpcError(w, 401, "AuthenticationRequired", "invalid token")

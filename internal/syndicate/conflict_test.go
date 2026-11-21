@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/pds/pdstest"
@@ -38,7 +39,7 @@ func TestConflictRechecksEditedArticle(t *testing.T) {
 			f.Put(pds.DocumentCollection, "key", jsontext.Value(docJSON))
 			f.Put(pds.PostCollection, "key", jsontext.Value(postJSON))
 			racing := concurrentEdit{c, func() { f.Put(pds.DocumentCollection, "key", jsontext.Value(tc.edit)) }}
-			syndicate.New(articles{{URI: docURI, Slug: "old"}}, racing, did, publication, origin, pdstest.Password, slog.Default()).Run(t.Context())
+			syndicate.New(articles{{URI: docURI, Slug: "old"}}, racing, did, publication, origin, pdstest.Password, slog.Default(), time.Now).Run(t.Context())
 			doc, err := c.GetDocument(t.Context(), did, "key")
 			if err != nil {
 				t.Fatal(err)
