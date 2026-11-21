@@ -36,7 +36,7 @@ func newStatic(fsys fs.FS) (*static, error) {
 		}
 		hash := sha256.Sum256(fileBytes)
 		encoded := hex.EncodeToString(hash[:])
-		s.hashes[path] = encoded
+		s.hashes[path] = encoded[:12]
 		return nil
 	}); err != nil {
 		return nil, err
@@ -48,19 +48,18 @@ func newStatic(fsys fs.FS) (*static, error) {
 // name is an error, so a typo in a template fails rendering.
 func (s *static) url(name string) (string, error) {
 	if hash, ok := s.hashes[name]; ok {
-		return fmt.Sprintf("/static/%s?v=%s", name, hash[:12]), nil
+		return fmt.Sprintf("/static/%s?v=%s", name, hash), nil
 	}
 	return "", fmt.Errorf("static: unknown file %q", name)
 }
 
-// ServeHTTP serves the file named by the {path...} wildcard with a one-year
-// immutable cache. The ?v= query is ignored.
+// ServeHTTP caches an asset as immutable only under its current content version.
 func (s *static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rPath := r.PathValue("path")
-	if _, ok := s.hashes[rPath]; ok {
+	if hash, ok := s.hashes[rPath]; ok {
 		fileBytes, err := fs.ReadFile(s.fsys, rPath)
 		if err != nil {
-			http.NotFound(w, r)
+			http.Error(w, "Asset unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		var contentType string
@@ -77,7 +76,9 @@ func (s *static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			contentType = mime.TypeByExtension(path.Ext(rPath))
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		if r.URL.Query().Get("v") == hash {
+			w.Header().Set("Cache-Control", immutableCache)
+		}
 		_, _ = w.Write(fileBytes)
 		return
 	}
