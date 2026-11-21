@@ -4,8 +4,9 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
+
+	"github.com/wescran/cranlab/internal/weburl"
 )
 
 // Config holds the server's settings.
@@ -18,12 +19,6 @@ type Config struct {
 	PublicationURI   string // PUBLICATION_URI
 	WebmentionDomain string // WEBMENTION_DOMAIN, e.g. cranlab.ca
 	AppPassword      string // APP_PASSWORD (optional; empty disables syndication)
-}
-
-// validURL reports whether raw is an absolute http or https URL with a host.
-func validURL(raw string) bool {
-	u, err := url.Parse(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // Load reads and validates the configuration through getenv. Every variable
@@ -46,20 +41,24 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 
+	requiredURL := func(name string) string {
+		v := strings.TrimRight(strings.TrimSpace(getenv(name)), "/")
+		if !weburl.Absolute(v) {
+			errs = append(errs, fmt.Errorf("%s must be an http or https URL with a host", name))
+		}
+		return v
+	}
+
 	c := Config{
 		ListenAddr:       value("LISTEN_ADDR", true),
-		SiteURL:          strings.TrimRight(value("SITE_URL", true), "/"),
+		SiteURL:          requiredURL("SITE_URL"),
 		DID:              value("DID", true),
-		PDSURL:           strings.TrimRight(value("PDS_URL", true), "/"),
-		PDSPublicURL:     strings.TrimRight(value("PDS_PUBLIC_URL", true), "/"),
+		PDSURL:           requiredURL("PDS_URL"),
+		PDSPublicURL:     requiredURL("PDS_PUBLIC_URL"),
 		PublicationURI:   value("PUBLICATION_URI", true),
 		WebmentionDomain: value("WEBMENTION_DOMAIN", true),
 		AppPassword:      value("APP_PASSWORD", false),
 	}
-	const httpURL = "an http or https URL with a host"
-	check("SITE_URL", c.SiteURL, validURL(c.SiteURL), httpURL)
-	check("PDS_URL", c.PDSURL, validURL(c.PDSURL), httpURL)
-	check("PDS_PUBLIC_URL", c.PDSPublicURL, validURL(c.PDSPublicURL), httpURL)
 	check("DID", c.DID, strings.HasPrefix(c.DID, "did:"), `a DID (starting with "did:")`)
 	check("PUBLICATION_URI", c.PublicationURI, strings.HasPrefix(c.PublicationURI, "at://"), `an AT-URI (starting with "at://")`)
 

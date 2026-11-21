@@ -126,7 +126,7 @@ type Blob struct {
 	Ref struct {
 		Link string `json:"$link"` // the blob's CID
 	} `json:"ref"`
-	MimeType string `json:"mimeType"`
+	MIMEType string `json:"mimeType"`
 	Size     int    `json:"size"`
 }
 

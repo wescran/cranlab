@@ -30,7 +30,7 @@ type Deps struct {
 
 // PDS is what the site reads from the PDS (satisfied by *pds.Client).
 type PDS interface {
-	ListDocuments(ctx context.Context, did string) ([]pds.Record[pds.Document], error)
+	ListDocuments(ctx context.Context, did string) (pds.DocumentListing, error)
 	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
 	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
 	GetBlob(ctx context.Context, did, cid string) (io.ReadCloser, string, error)

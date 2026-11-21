@@ -29,7 +29,21 @@ type Server struct {
 	failWith int
 	delay    time.Duration
 	noFinal  bool
+	replies  map[requestKey]reply
 	requests []url.URL
+}
+
+type requestKey struct{ method, cursor string }
+type reply struct {
+	status int
+	body   string
+}
+
+// Respond overrides a single XRPC method and cursor with a literal HTTP response.
+func (s *Server) Respond(method, cursor string, status int, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.replies[requestKey{"/xrpc/" + method, cursor}] = reply{status, body}
 }
 
 type record struct {
@@ -46,6 +60,7 @@ type blob struct {
 func New(t testing.TB, did string) *Server {
 	s := &Server{
 		DID:     did,
+		replies: map[requestKey]reply{},
 		records: map[string]map[string]record{},
 		blobs:   map[string]blob{},
 	}
@@ -127,6 +142,7 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 		s.mu.Lock()
 		s.requests = append(s.requests, *r.URL)
 		failWith, delay := s.failWith, s.delay
+		override, ok := s.replies[requestKey{r.URL.Path, r.URL.Query().Get("cursor")}]
 		s.mu.Unlock()
 		if delay > 0 {
 			select {
@@ -137,6 +153,12 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 		}
 		if failWith != 0 {
 			xrpcError(w, failWith, "InternalServerError", "Internal Server Error")
+			return
+		}
+		if ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(override.status)
+			_, _ = w.Write([]byte(override.body))
 			return
 		}
 		next.ServeHTTP(w, r)

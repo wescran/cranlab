@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/weburl"
 )
 
 // Facet feature types.
@@ -23,8 +24,7 @@ func facetHref(features []pds.Feature) string {
 	for _, feature := range features {
 		switch feature.Type {
 		case featureLink:
-			parsed, err := url.Parse(feature.URI)
-			if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+			if weburl.Absolute(feature.URI) {
 				return feature.URI
 			}
 		case featureMention:

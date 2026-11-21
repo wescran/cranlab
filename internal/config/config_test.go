@@ -102,6 +102,9 @@ func TestLoadTrims(t *testing.T) {
 
 func TestLoadRejectsBadValues(t *testing.T) {
 	tests := []struct{ name, value string }{
+		{"SITE_URL", "////"},
+		{"PDS_URL", "////"},
+		{"PDS_PUBLIC_URL", "////"},
 		{"SITE_URL", "cranlab.ca"},
 		{"SITE_URL", "ftp://cranlab.ca"},
 		{"SITE_URL", "https://"},
@@ -115,6 +118,9 @@ func TestLoadRejectsBadValues(t *testing.T) {
 			_, err := Load(env(map[string]string{tt.name: tt.value}))
 			if err == nil {
 				t.Fatalf("Load with %s=%q: want an error", tt.name, tt.value)
+			}
+			if strings.Contains(err.Error(), tt.value) {
+				t.Errorf("error leaks invalid value: %q", err)
 			}
 			if !strings.Contains(err.Error(), tt.name) {
 				t.Errorf("error %q doesn't name %s", err, tt.name)
