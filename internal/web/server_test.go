@@ -1,9 +1,10 @@
 package web
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	"willnorris.com/go/microformats"
 
 	"github.com/wescran/cranlab/internal/config"
-	site "github.com/wescran/cranlab/web"
 )
 
 func testConfig() config.Config {
@@ -145,8 +145,7 @@ func TestHead(t *testing.T) {
 			if !hasPrefix(data.Rels["stylesheet"], "https://cranlab.ca/static/css/main.css?v=") {
 				t.Errorf("stylesheet = %v, want the versioned main.css", data.Rels["stylesheet"])
 			}
-			// Unversioned, to match main.css's @font-face URL exactly.
-			if !contains(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2") {
+			if !hasPrefix(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2?v=") {
 				t.Errorf("preload = %v, want the Geist font at the URL main.css uses", data.Rels["preload"])
 			}
 		})
@@ -292,7 +291,8 @@ func TestMethodNotAllowed(t *testing.T) {
 
 func TestStaticFromPage(t *testing.T) {
 	h := newTestHandler(t)
-	css := regexp.MustCompile(`/static/css/main\.css\?v=[0-9a-f]{12}`).FindString(get(t, h, "/about").Body.String())
+	page := get(t, h, "/about").Body.String()
+	css := regexp.MustCompile(`/static/css/main\.css\?v=[0-9a-f]{12}`).FindString(page)
 	if css == "" {
 		t.Fatal("no versioned main.css link on the about page")
 	}
@@ -312,10 +312,23 @@ func TestStaticFromPage(t *testing.T) {
 			t.Errorf("GET %s = %d, Cache-Control = %q; want a mutable asset", path, asset.Code, got)
 		}
 	}
-	want, _ := fs.ReadFile(site.FS, "static/css/main.css")
-	got, _ := io.ReadAll(rec.Body)
-	if string(got) != string(want) {
-		t.Error("served CSS differs from web/static/css/main.css")
+	hash := sha256.Sum256(rec.Body.Bytes())
+	if !strings.HasSuffix(css, fmt.Sprintf("?v=%x", hash[:6])) {
+		t.Error("stylesheet URL does not version the served bytes")
+	}
+	preload := regexp.MustCompile(`<link rel="preload" href="(/static/fonts/Geist-Variable\.woff2\?v=[0-9a-f]{12})"`).FindStringSubmatch(page)
+	if preload == nil || !strings.Contains(rec.Body.String(), preload[1]) {
+		t.Fatal("body font preload and stylesheet must reference the same versioned URL")
+	}
+	for _, name := range []string{"Geist-Variable", "Geist-Italic-Variable", "GeistMono-Variable", "GeistMono-Italic-Variable"} {
+		font := regexp.MustCompile(`/static/fonts/` + name + `\.woff2\?v=[0-9a-f]{12}`).FindString(rec.Body.String())
+		if font == "" {
+			t.Fatalf("no versioned font URL for %s", name)
+		}
+		r := get(t, h, font)
+		if r.Code != 200 || !strings.Contains(r.Header().Get("Cache-Control"), "immutable") {
+			t.Errorf("font %s: %d, Cache-Control %q", font, r.Code, r.Header().Get("Cache-Control"))
+		}
 	}
 }
 

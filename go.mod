@@ -3,14 +3,17 @@ module github.com/wescran/cranlab
 go 1.27.1
 
 require (
+	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/coder/websocket v1.8.15
 	github.com/yuin/goldmark v1.8.7
+	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/net v0.61.0
 	modernc.org/sqlite v1.62.0
 	willnorris.com/go/microformats v1.2.0
 )
 
 require (
+	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
