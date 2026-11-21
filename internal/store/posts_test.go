@@ -84,4 +84,15 @@ func TestRecentAndFullPostRefresh(t *testing.T) {
 	check("b", "after edit")
 	check("c", "linked later")
 	check("d", "")
+
+	// One coalesced signal covers more than a page of new posts. Even when
+	// the previous head has disappeared, this scan must not remove its Note.
+	f.Delete(pds.PostCollection, "zz")
+	for i := range 202 {
+		put(fmt.Sprintf("zzz%03d", i), "burst")
+	}
+	refreshPosts(false)
+	check("zzz000", "burst")
+	check("zzz201", "burst")
+	check("zz", "just published")
 }

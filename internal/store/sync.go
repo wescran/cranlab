@@ -31,7 +31,7 @@ func listen(ctx context.Context, subscribe func(context.Context, func()) error, 
 	}
 }
 
-// StartSync subscribes while performing one synchronous startup refresh. Its
+// StartSync starts the subscription and serialized refresh loop in the background. Its
 // stop function cancels and joins all work before the caller closes the store.
 func StartSync(parent context.Context, subscribe func(context.Context, func()) error, refresh func(context.Context, bool) error) (stop func()) {
 	ctx, cancel := context.WithCancel(parent)
@@ -50,8 +50,8 @@ func StartSync(parent context.Context, subscribe func(context.Context, func()) e
 			slog.Warn("snapshot refresh failed", "err", err)
 		}
 	}
-	run(true)
 	wg.Go(func() {
+		run(true)
 		ticker := time.NewTicker(15 * time.Minute)
 		defer ticker.Stop()
 		for {
