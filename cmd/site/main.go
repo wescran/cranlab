@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -32,10 +33,9 @@ func siteHandler(ctx context.Context, cfg config.Config, interactions web.Intera
 		return nil, nil, err
 	}
 	refresh := func(ctx context.Context, full bool) error {
-		if err := db.RefreshArticles(ctx, client); err != nil {
-			return err
-		}
-		return db.RefreshPosts(ctx, client, full)
+		articleErr := db.RefreshArticles(ctx, client)
+		postErr := db.RefreshPosts(ctx, client, full)
+		return errors.Join(articleErr, postErr)
 	}
 	if cfg.AppPassword != "" {
 		runner := syndicate.New(db, client, cfg.DID, cfg.PublicationURI, cfg.SiteURL, cfg.AppPassword, slog.Default(), time.Now)

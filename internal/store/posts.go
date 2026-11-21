@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,12 +22,13 @@ type PostSource interface {
 
 const postMarker = `SELECT id FROM post_snapshot WHERE did=? AND publication=? AND site=?`
 
-// RefreshPosts upserts just the newest page on a signal. Only an exhausted full
-// scan may replace the collection or initialize the snapshot after an outage.
+// RefreshPosts upserts through the previously indexed head on a signal. If that
+// record disappeared, exhaust the listing without treating absence as deletion.
 func (s *Store) RefreshPosts(ctx context.Context, source PostSource, full bool) error {
+	var head string
 	if !full {
-		var id int
-		err := s.db.QueryRowContext(ctx, postMarker, s.did, s.publication, s.siteURL).Scan(&id)
+		// listRecords is descending by rkey, not by the post's createdAt.
+		err := s.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT MAX(rkey) FROM posts), '') WHERE EXISTS (`+postMarker+`)`, s.did, s.publication, s.siteURL).Scan(&head)
 		if errors.Is(err, sql.ErrNoRows) {
 			full = true
 		} else if err != nil {
@@ -44,13 +46,16 @@ func (s *Store) RefreshPosts(ctx context.Context, source PostSource, full bool) 
 			return errors.New("missing posts page")
 		}
 		posts = append(posts, page...)
-		if !full || next == "" {
+		if next == "" {
 			break
 		}
 		if seen[next] {
 			return errors.New("repeated posts cursor")
 		}
 		seen[next] = true
+		if head != "" && slices.ContainsFunc(page, func(p pds.Record[pds.Post]) bool { return pds.RKey(p.URI) == head }) {
+			break
+		}
 		cursor = next
 	}
 	tx, err := s.db.BeginTx(ctx, nil)

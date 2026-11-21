@@ -8,7 +8,7 @@ import (
 )
 
 func TestRefreshKeepsLastGoodArticlesAndTags(t *testing.T) {
-	for _, fail := range []string{"later page", "missing records", "foreign owner", "transaction"} {
+	for _, fail := range []string{"later page", "repeated filtered document", "missing records", "foreign owner", "transaction"} {
 		t.Run(fail, func(t *testing.T) {
 			f := newFixture(t)
 			// The first record would change both a title and its Tag index if published.
@@ -17,6 +17,9 @@ func TestRefreshKeepsLastGoodArticlesAndTags(t *testing.T) {
 			switch fail {
 			case "later page":
 				f.pds.Respond(list, "3mforeign", 503, `{}`)
+			case "repeated filtered document":
+				// Both copies are outside this Publication. Filtering first would hide the overlap.
+				f.pds.Respond(list, "3mforeign", 200, `{"records":[{"uri":"at://`+testDID+`/site.standard.document/3mforeign","cid":"cid","value":{"site":"elsewhere"}}]}`)
 			case "missing records":
 				f.pds.Respond(list, "", 200, `{}`)
 			case "foreign owner":

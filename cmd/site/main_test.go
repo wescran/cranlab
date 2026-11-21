@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wescran/cranlab/internal/config"
 	"github.com/wescran/cranlab/internal/pds"
@@ -32,20 +34,51 @@ func TestStartupBackfill(t *testing.T) {
 			t.Fatalf("GET %s = %d, want %d containing %q", path, r.Code, want, contains)
 		}
 	}
-	fake.FailWith(503)
-	h, close := start()
+	// Stall the backfill until cancellation, and require the route checks to
+	// run while the PDS request is still outstanding (not after its timeout).
+	stalled := func() (http.Handler, func()) {
+		t.Helper()
+		started := make(chan context.Context, 1)
+		pdsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("collection") == pds.DocumentCollection {
+				started <- r.Context()
+				<-r.Context().Done()
+				return
+			}
+			fake.Config.Handler.ServeHTTP(w, r)
+		}))
+		t.Cleanup(pdsServer.Close)
+		cfg.PDSURL = pdsServer.URL
+		h, stop := start()
+		select {
+		case ctx := <-started:
+			if ctx.Err() != nil {
+				stop()
+				t.Fatal("startup waited for the PDS request to finish")
+			}
+		case <-time.After(5 * time.Second):
+			stop()
+			t.Fatal("backfill did not start")
+		}
+		return h, stop
+	}
+	h, close := stalled()
 	check(h, "/articles/welcome", 503, "Temporarily unavailable")
 	check(h, "/index.xml", 503, "Temporarily unavailable")
 	check(h, "/notes/missing", 503, "Temporarily unavailable")
 	close()
-	fake.FailWith(0)
+	cfg.PDSURL = fake.URL
 	fake.Put(pds.PostCollection, "top", map[string]string{"text": "Last-good Note"})
 	fake.Put(pds.DocumentCollection, "doc", pds.Document{Site: cfg.PublicationURI, Path: "/articles/welcome", Title: "Welcome back", Tags: []string{" Intro ", "INTRO"}})
 	h, close = start()
+	await(t, "initial Note snapshot", func() bool {
+		r := httptest.NewRecorder()
+		h.ServeHTTP(r, httptest.NewRequest("GET", "/notes/top", nil))
+		return r.Code == 200
+	})
 	check(h, "/articles/welcome", 200, "Welcome back")
 	close()
-	fake.FailWith(503)
-	h, close = start()
+	h, close = stalled()
 	defer close()
 	before := len(fake.Requests())
 	check(h, "/articles", 200, "Welcome back")

@@ -199,12 +199,19 @@ type DocumentListing struct {
 // Follow every cursor, even when the next page may be empty.
 func (c *Client) ListDocuments(ctx context.Context, did string) (DocumentListing, error) {
 	allRecords := make([]Record[Document], 0)
+	seenURIs := make(map[string]bool)
 	seen := make(map[string]bool)
 	cursor := ""
 	for {
 		records, nextCursor, err := listPage[Document](ctx, c, did, DocumentCollection, cursor, 100)
 		if err != nil {
 			return DocumentListing{}, fmt.Errorf("ListDocuments: %w", err)
+		}
+		for _, record := range records {
+			if seenURIs[record.URI] {
+				return DocumentListing{}, errors.New("ListDocuments: repeated record URI")
+			}
+			seenURIs[record.URI] = true
 		}
 		allRecords = append(allRecords, records...)
 		if nextCursor == "" {
