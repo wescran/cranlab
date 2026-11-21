@@ -226,18 +226,23 @@ func TestMedia(t *testing.T) {
 
 func TestMediaRejectsBadCIDs(t *testing.T) {
 	f := newFixture(t)
-	for _, path := range []string{"/media/not-a-cid", "/media/BAFKREIUPPER", "/media/bafk..%2Fxrpc", "/media/b1"} {
+	before := len(f.pds.Requests())
+	for _, path := range []string{"/media/not-a-cid", "/media/BAFKREIUPPER", "/media/bafk..%2Fxrpc", "/media/b1", "/media/bafkreitruncated"} {
 		if rec := get(t, f.handler, path); rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", path, rec.Code)
 		}
 	}
-	for _, u := range f.pds.Requests() {
-		if u.Path == "/xrpc/com.atproto.sync.getBlob" {
-			t.Errorf("an invalid CID reached the PDS: %s", u.String())
-		}
+	if got := f.pds.Requests()[before:]; len(got) != 0 {
+		t.Errorf("invalid CIDs reached the PDS: %v", got)
 	}
-	if rec := get(t, f.handler, "/media/bafkreimissingblob"); rec.Code != http.StatusNotFound {
-		t.Errorf("a missing blob = %d, want 404", rec.Code)
+}
+
+func TestMediaMissing(t *testing.T) {
+	f := newFixture(t)
+	const missing = "bafkreih7uy2yhx5gobvypuuexbvq22j2cypeqqfk2lc46225e7b3syq7pu"
+	rec := get(t, f.handler, "/media/"+missing)
+	if cc := rec.Result().Header.Get("Cache-Control"); rec.Code != http.StatusNotFound || cc != "public, max-age=60" {
+		t.Errorf("missing blob = %d, Cache-Control %q; want 404 cached for 60s", rec.Code, cc)
 	}
 }
 
