@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"html/template"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -26,6 +25,8 @@ type Deps struct {
 	PDS PDS
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
+	// Blobs streams owner media. Nil uses PDS.
+	Blobs BlobReader
 }
 
 // PDS is what the site reads from the PDS (satisfied by *pds.Client).
@@ -33,7 +34,7 @@ type PDS interface {
 	ListDocuments(ctx context.Context, did string) (pds.DocumentListing, error)
 	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
 	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
-	GetBlob(ctx context.Context, did, cid string) (io.ReadCloser, string, error)
+	BlobReader
 }
 
 // Page is the data every page template receives.
@@ -78,6 +79,9 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	}
 	if deps.Now == nil {
 		deps.Now = time.Now
+	}
+	if deps.Blobs == nil {
+		deps.Blobs = deps.PDS
 	}
 	s := &server{
 		cfg:    cfg,

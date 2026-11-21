@@ -13,9 +13,9 @@ import (
 const (
 	testDID         = "did:plc:ogl52fc2rdooori2ayf74can"
 	testPublication = "at://did:plc:ogl52fc2rdooori2ayf74can/site.standard.publication/3mxcsltpg2k26"
-	catCID          = "bafkreicatcatcatcatcat"
-	htmlCID         = "bafkreihtmlhtmlhtml"
-	thumbCID        = "bafkreithumbthumb"
+	catCID          = "bafkreigqcnqu3qkkg7xcb7usabltpk35gqt6p2jvqcwvn34kiiqf4732jy"
+	htmlCID         = "bafkreic4cqgtlxfunjrc4lhn6xxvzq3drtp72harrsjtd6giizu7bn2hqm"
+	thumbCID        = "bafkreiaf53wc24eek2knhoujvwpbynfwwtmamj24hrr3qqsbuqfoiwi4uq"
 )
 
 type fixture struct {
