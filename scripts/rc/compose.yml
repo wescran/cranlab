@@ -1,0 +1,30 @@
+services:
+  pds:
+    image: python:3.13-alpine
+    volumes: ["./fixture.py:/fixture.py:ro"]
+    command: ["python", "/fixture.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  site:
+    build: ../..
+    volumes: ["cache:/var/lib/cranlab"]
+    environment:
+      LISTEN_ADDR: ':8080'
+      SITE_URL: https://site.invalid
+      PDS_URL: http://pds:8000
+      PDS_PUBLIC_URL: https://pds.invalid
+      DID: did:plc:fixture
+      PUBLICATION_URI: at://did:plc:fixture/site.standard.publication/local
+      WEBMENTION_DOMAIN: site.invalid
+
+volumes:
+  cache: {}
+
+# No published ports or runtime access to real upstreams.
+networks:
+  default:
+    internal: true
