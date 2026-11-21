@@ -19,18 +19,21 @@ import (
 // siteHandler opens the disposable read model and attempts one complete backfill.
 // An upstream outage is not a reason to stop serving the last good snapshot.
 func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), error) {
-	db, err := store.Open(cfg.CacheDBPath, cfg.DID, cfg.PublicationURI)
+	db, err := store.Open(cfg.CacheDBPath, cfg.DID, cfg.PublicationURI, cfg.SiteURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open cache: %w", err)
 	}
 	client := pds.New(cfg.PDSURL, nil)
-	h, err := web.New(cfg, web.Deps{Store: db, PDS: client})
+	h, err := web.New(cfg, web.Deps{Store: db, Blobs: client})
 	if err != nil {
 		db.Close()
 		return nil, nil, err
 	}
-	stop := store.StartSync(ctx, client.SubscribeRepos, func(ctx context.Context) error {
-		return db.RefreshArticles(ctx, client)
+	stop := store.StartSync(ctx, client.SubscribeRepos, func(ctx context.Context, full bool) error {
+		if err := db.RefreshArticles(ctx, client); err != nil {
+			return err
+		}
+		return db.RefreshPosts(ctx, client, full)
 	})
 	return h, func() { stop(); db.Close() }, nil
 }

@@ -12,8 +12,7 @@ import (
 
 // HomePage is the home page's content.
 type HomePage struct {
-	// Latest is the newest article, or nil if there are none.
-	Latest *ArticleSummary
+	Articles []ArticleSummary
 	// Notes are the most recent notes (up to 5).
 	Notes []NoteView
 }
@@ -55,10 +54,11 @@ type NoteView struct {
 	// URL is the note's path, e.g. "/notes/3mxc6hxwdnc2s".
 	URL       string
 	Text      template.HTML
-	Published time.Time
+	Published *time.Time
 	Embed     *render.Embed
 	// BlueskyURL is the post on bsky.app.
 	BlueskyURL string
+	AuthorURL  string
 }
 
 // TagsPage lists every tag.

@@ -66,12 +66,15 @@ func TestSubscribeReposUpdatesRunningSite(t *testing.T) {
 	put := func(title, tag string) {
 		fake.Put(pds.DocumentCollection, "a", pds.Document{Site: cfg.PublicationURI, Path: "/articles/example", Title: title, Tags: []string{tag}})
 	}
+	fake.Put(pds.PostCollection, "fresh", map[string]string{"text": "Fresh Note"})
 	put("First edition", "draft")
 	ring()
 	await("publish", func() bool { return page("/articles/example", 200, "First edition", "") })
 	if !page("/articles", 200, "First edition", "") || !page("/tags", 200, "draft <span>1</span>", "") {
 		t.Fatal("publish missed list or tag count")
 	}
+
+	await("new note after repo signal", func() bool { return page("/notes/fresh", 200, "Fresh Note", "") })
 
 	c.CloseNow()
 	c = nextConnection()

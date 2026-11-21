@@ -14,18 +14,22 @@ import (
 )
 
 type Store struct {
-	db               *sql.DB
-	did, publication string
+	db                        *sql.DB
+	did, publication, siteURL string
 }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS article_snapshot (id INTEGER PRIMARY KEY CHECK(id=1), did TEXT NOT NULL, publication TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, position INTEGER NOT NULL UNIQUE, article BLOB NOT NULL);
-CREATE TABLE IF NOT EXISTS article_tags (tag TEXT NOT NULL, slug TEXT NOT NULL, PRIMARY KEY(tag,slug));`
+CREATE TABLE IF NOT EXISTS article_tags (tag TEXT NOT NULL, slug TEXT NOT NULL, PRIMARY KEY(tag,slug));
+CREATE TABLE IF NOT EXISTS announcement_refs(uri TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS post_snapshot(id INTEGER PRIMARY KEY CHECK(id=1), did TEXT NOT NULL, publication TEXT NOT NULL, site TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS posts(rkey TEXT PRIMARY KEY, uri TEXT NOT NULL, published TEXT NOT NULL, candidate INTEGER NOT NULL, value BLOB NOT NULL);
+CREATE INDEX IF NOT EXISTS posts_chronological ON posts(published DESC,rkey DESC) WHERE candidate=1;`
 
 // Open binds the cache to this DID and Publication. A file initialized for a
 // different identity never supplies a last-good fallback.
-func Open(path, did, publication string) (*Store, error) {
+func Open(path, did, publication, siteURL string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -36,7 +40,7 @@ func Open(path, did, publication string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db, did: did, publication: publication}, nil
+	return &Store{db: db, did: did, publication: publication, siteURL: siteURL}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -61,8 +65,13 @@ func (s *Store) RefreshArticles(ctx context.Context, source DocumentSource) erro
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags; DELETE FROM articles;`); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags; DELETE FROM articles; DELETE FROM announcement_refs;`); err != nil {
 		return err
+	}
+	for uri := range content.Announcements(articles) {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO announcement_refs VALUES(?)", uri); err != nil {
+			return err
+		}
 	}
 	for pos, a := range articles {
 		data, err := json.Marshal(a)
@@ -86,13 +95,19 @@ func (s *Store) RefreshArticles(ctx context.Context, source DocumentSource) erro
 
 // Check the snapshot identity and read its rows under the same transaction.
 func query[T any](ctx context.Context, s *Store, scan func(*sql.Rows) (T, error), stmt string, args ...any) ([]T, error) {
+	return querySnapshot(ctx, s, articleSnapshot, []any{s.did, s.publication}, scan, stmt, args...)
+}
+
+const articleSnapshot = "SELECT id FROM article_snapshot WHERE did=? AND publication=?"
+
+func querySnapshot[T any](ctx context.Context, s *Store, marker string, identity []any, scan func(*sql.Rows) (T, error), stmt string, args ...any) ([]T, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	var id int
-	err = tx.QueryRowContext(ctx, `SELECT id FROM article_snapshot WHERE did=? AND publication=?`, s.did, s.publication).Scan(&id)
+	err = tx.QueryRowContext(ctx, marker, identity...).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, content.ErrNoSnapshot
 	}

@@ -171,8 +171,8 @@ func TestNoteNotFound(t *testing.T) {
 
 func TestHomeShowsLatestArticleAndNotes(t *testing.T) {
 	_, body := newFixture(t).get(t, "/")
-	mustContain(t, body, "Latest Article", `href="/articles/homelab"`, "My Homelab", "Recent Notes", `href="/notes"`)
-	mustNotContain(t, body, `href="/articles/welcome"`)
+	mustContain(t, body, "Recent Articles", `href="/articles/homelab"`, "My Homelab", "Recent Notes", `href="/notes"`)
+	mustContain(t, body, `href="/articles/welcome"`)
 	if keys := noteKeys(body); len(keys) != 5 || keys[0] != "3n0025" {
 		t.Errorf("home notes = %v, want the 5 newest", keys)
 	}

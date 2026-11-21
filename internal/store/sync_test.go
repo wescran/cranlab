@@ -20,8 +20,12 @@ func TestBurstAndWakeDuringRefresh(t *testing.T) {
 			ring = wake
 			<-ctx.Done()
 			return ctx.Err()
-		}, func(ctx context.Context) error {
-			if calls.Add(1) == 2 {
+		}, func(ctx context.Context, full bool) error {
+			n := calls.Add(1)
+			if full != (n == 1) {
+				t.Errorf("refresh %d: full=%v", n, full)
+			}
+			if n == 2 {
 				select {
 				case <-release:
 				case <-ctx.Done():
@@ -70,7 +74,7 @@ func TestRetryInterruptedSubscription(t *testing.T) {
 			attempts.Add(1)
 			return io.EOF
 		}
-		stop := store.StartSync(t.Context(), subscribe, func(context.Context) error { return nil })
+		stop := store.StartSync(t.Context(), subscribe, func(context.Context, bool) error { return nil })
 		defer stop()
 		for i, delay := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 			synctest.Wait()
@@ -98,7 +102,10 @@ func TestFallbackWithoutSignals(t *testing.T) {
 		stop := store.StartSync(ctx, func(ctx context.Context, wake func()) error {
 			<-ctx.Done()
 			return ctx.Err()
-		}, func(ctx context.Context) error {
+		}, func(ctx context.Context, full bool) error {
+			if !full {
+				t.Error("startup/fallback must reconcile all posts")
+			}
 			if calls.Add(1) == 2 {
 				<-ctx.Done() // cancel while the fallback is in flight
 				return ctx.Err()

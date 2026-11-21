@@ -3,7 +3,6 @@ package web
 
 import (
 	"bytes"
-	"context"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/wescran/cranlab/internal/config"
 	"github.com/wescran/cranlab/internal/content"
-	"github.com/wescran/cranlab/internal/pds"
 	site "github.com/wescran/cranlab/web"
 )
 
@@ -23,19 +21,10 @@ const SiteTitle = "CranLab"
 // Deps are the server's collaborators.
 type Deps struct {
 	Store content.ContentStore
-	// PDS is where content is read from.
-	PDS PDS
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
-	// Blobs streams owner media. Nil uses PDS.
+	// Blobs streams owner media.
 	Blobs BlobReader
-}
-
-// PDS is what the site reads from the PDS (satisfied by *pds.Client).
-type PDS interface {
-	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
-	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
-	BlobReader
 }
 
 // Page is the data every page template receives.
@@ -87,9 +76,6 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
-	if deps.Blobs == nil {
-		deps.Blobs = deps.PDS
-	}
 	s := &server{
 		cfg:    cfg,
 		deps:   deps,
@@ -100,7 +86,6 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
-	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "about", http.StatusOK, Page{
 			Description: "About Wesley Cranston",
@@ -124,19 +109,20 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
 	mux.Handle("GET /static/{path...}", staticHandler)
-	articleRoute := func(pattern string, handler http.HandlerFunc) {
+	snapshotRoute := func(pattern string, handler http.HandlerFunc) {
 		if deps.Store == nil {
 			handler = func(w http.ResponseWriter, r *http.Request) { s.unavailable(w, r, content.ErrNoSnapshot) }
 		}
 		mux.HandleFunc(pattern, handler)
 	}
-	articleRoute("GET /index.xml", s.feed)
-	articleRoute("GET /articles", s.articles)
-	articleRoute("GET /articles/{slug}", s.article)
-	mux.HandleFunc("GET /notes", s.notes)
-	mux.HandleFunc("GET /notes/{rkey}", s.note)
-	articleRoute("GET /tags", s.tags)
-	articleRoute("GET /tags/{tag}", s.tag)
+	snapshotRoute("GET /{$}", s.home)
+	snapshotRoute("GET /index.xml", s.feed)
+	snapshotRoute("GET /articles", s.articles)
+	snapshotRoute("GET /articles/{slug}", s.article)
+	snapshotRoute("GET /notes", s.notes)
+	snapshotRoute("GET /notes/{rkey}", s.note)
+	snapshotRoute("GET /tags", s.tags)
+	snapshotRoute("GET /tags/{tag}", s.tag)
 	mux.HandleFunc("GET /media/{cid}", s.media)
 
 	return s, nil

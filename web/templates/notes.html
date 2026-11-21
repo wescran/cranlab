@@ -1,12 +1,12 @@
 {{define "main"}}
   <h1>Notes</h1>
-  {{with .Data.Notes}}
   <section class="h-feed notes">
+  {{with .Data.Notes}}
     {{- range .}}{{template "note" .}}{{end}}
-  </section>
   {{else}}
   <p>No notes here.</p>
   {{end}}
+  </section>
   {{with .Data.OlderURL}}
   <nav class="older"><a href="{{.}}" rel="next">Older notes</a></nav>
   {{end}}
