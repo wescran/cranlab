@@ -24,15 +24,15 @@ func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), 
 		return nil, nil, fmt.Errorf("open cache: %w", err)
 	}
 	client := pds.New(cfg.PDSURL, nil)
-	if err := db.RefreshArticles(ctx, client); err != nil {
-		slog.Warn("startup article refresh failed", "err", err)
-	}
 	h, err := web.New(cfg, web.Deps{Store: db, PDS: client})
 	if err != nil {
 		db.Close()
 		return nil, nil, err
 	}
-	return h, func() { db.Close() }, nil
+	stop := store.StartSync(ctx, client.SubscribeRepos, func(ctx context.Context) error {
+		return db.RefreshArticles(ctx, client)
+	})
+	return h, func() { stop(); db.Close() }, nil
 }
 
 func run() error {
@@ -46,11 +46,11 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	serverHandler, closeStore, err := siteHandler(ctx, cfg)
+	serverHandler, stopSite, err := siteHandler(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}
-	defer closeStore()
+	defer stopSite()
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
 		ReadTimeout:       10 * time.Second,

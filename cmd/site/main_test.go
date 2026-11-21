@@ -50,7 +50,10 @@ func TestStartupBackfill(t *testing.T) {
 	check(h, "/tags", 200, `intro <span>1</span>`)
 	check(h, "/tags/intro", 200, "Welcome back")
 	check(h, "/articles/gone", 404, "Page Not Found")
-	if after := len(fake.Requests()); after != before {
-		t.Fatalf("page views made %d upstream requests", after-before)
+	for _, u := range fake.Requests()[before:] {
+		// The background listener may be connecting while pages are served.
+		if u.Path != "/xrpc/com.atproto.sync.subscribeRepos" {
+			t.Fatalf("page views made an upstream request: %s", u.Path)
+		}
 	}
 }

@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 var rkeyRe = regexp.MustCompile(`^at://[^/]+/[^/]+/([^/]+)$`)
@@ -46,6 +48,27 @@ func New(baseURL string, hc *http.Client) *Client {
 	return &Client{
 		baseURL: base,
 		hc:      &bounded,
+	}
+}
+
+// SubscribeRepos calls wake once per message until interrupted. The stream
+// is only a bell: discard payloads without buffering or decoding commits.
+func (c *Client) SubscribeRepos(ctx context.Context, wake func()) error {
+	conn, _, err := websocket.Dial(ctx, c.baseURL+"/xrpc/com.atproto.sync.subscribeRepos", &websocket.DialOptions{HTTPClient: c.hc})
+	if err != nil {
+		return err
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(-1) // firehose commits can exceed the default 32 KiB
+	for {
+		_, r, err := conn.Reader(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return err
+		}
+		wake()
 	}
 }
 

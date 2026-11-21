@@ -3,6 +3,7 @@ module github.com/wescran/cranlab
 go 1.27.1
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/yuin/goldmark v1.8.7
 	modernc.org/sqlite v1.62.0
 	willnorris.com/go/microformats v1.2.0

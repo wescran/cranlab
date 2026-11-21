@@ -16,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 // Server is a fake PDS hosting one repository.
@@ -23,14 +25,15 @@ type Server struct {
 	*httptest.Server
 	DID string
 
-	mu       sync.Mutex
-	records  map[string]map[string]record // collection → rkey → record
-	blobs    map[string]blob              // cid → blob
-	failWith int
-	delay    time.Duration
-	noFinal  bool
-	replies  map[requestKey]reply
-	requests []url.URL
+	mu            sync.Mutex
+	records       map[string]map[string]record // collection → rkey → record
+	blobs         map[string]blob              // cid → blob
+	failWith      int
+	delay         time.Duration
+	noFinal       bool
+	replies       map[requestKey]reply
+	requests      []url.URL
+	subscriptions chan *websocket.Conn
 }
 
 type requestKey struct{ method, cursor string }
@@ -40,10 +43,16 @@ type reply struct {
 }
 
 // Respond overrides a single XRPC method and cursor with a literal HTTP response.
+// Status 0 removes the override.
 func (s *Server) Respond(method, cursor string, status int, body string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.replies[requestKey{"/xrpc/" + method, cursor}] = reply{status, body}
+	key := requestKey{"/xrpc/" + method, cursor}
+	if status == 0 {
+		delete(s.replies, key)
+		return
+	}
+	s.replies[key] = reply{status, body}
 }
 
 type record struct {
@@ -59,15 +68,35 @@ type blob struct {
 // New starts a fake PDS for did, stopped when the test ends.
 func New(t testing.TB, did string) *Server {
 	s := &Server{
-		DID:     did,
-		replies: map[requestKey]reply{},
-		records: map[string]map[string]record{},
-		blobs:   map[string]blob{},
+		DID:           did,
+		subscriptions: make(chan *websocket.Conn),
+		replies:       map[requestKey]reply{},
+		records:       map[string]map[string]record{},
+		blobs:         map[string]blob{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.listRecords", s.listRecords)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.getRecord", s.getRecord)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.getBlob", s.getBlob)
+	mux.HandleFunc("GET /xrpc/com.atproto.sync.subscribeRepos", func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		ctx := c.CloseRead(r.Context())
+		select {
+		case s.subscriptions <- c:
+		case <-ctx.Done():
+			return
+		case <-t.Context().Done():
+			return
+		}
+		select {
+		case <-ctx.Done():
+		case <-t.Context().Done():
+		}
+	})
 	s.Server = httptest.NewServer(s.wrap(mux))
 	t.Cleanup(s.Close)
 	return s
@@ -97,6 +126,16 @@ func (s *Server) Put(collection, rkey string, value any) string {
 	}
 	s.records[collection][rkey] = record{cid: cid, value: raw}
 	return cid
+}
+
+// Subscriptions delivers each accepted connection for tests to ring or interrupt.
+func (s *Server) Subscriptions() <-chan *websocket.Conn { return s.subscriptions }
+
+// Delete removes a record without sending a wake-up.
+func (s *Server) Delete(collection, rkey string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.records[collection], rkey)
 }
 
 // PutBlob stores a blob under cid.
