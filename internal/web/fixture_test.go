@@ -46,6 +46,7 @@ func newFixture(t *testing.T) *fixture {
 			"$type": "at.markpub.markdown", "flavor": "gfm",
 			"text": map[string]any{"$type": "at.markpub.text", "markdown": "## Hi\n\n![a cat](https://weslandia.ca/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Aogl52fc2rdooori2ayf74can&cid=" + catCID + ")\n"},
 		},
+		"coverImage": map[string]any{"$type": "blob", "ref": map[string]string{"$link": catCID}, "mimeType": "image/png", "size": 3},
 		"bskyPostRef": map[string]string{"uri": "at://" + testDID + "/app.bsky.feed.post/3mwelcome", "cid": "bafyreipost"},
 	})
 	fake.Put(pds.DocumentCollection, "3mhomelab", map[string]any{

@@ -1,10 +1,8 @@
 {{define "main"}}
-  <h1>Articles</h1>
-  {{with .Data.Articles}}
   <section class="h-feed">
-    {{- range .}}{{template "article-summary" .}}{{end}}
+    <h1 class="p-name">Articles</h1>
+    {{- range .Data.Articles}}{{template "article-summary" .}}{{else}}
+    <p>No articles yet.</p>
+    {{- end}}
   </section>
-  {{else}}
-  <p>No articles yet.</p>
-  {{end}}
 {{end}}
