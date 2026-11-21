@@ -80,8 +80,8 @@ type ByteSlice struct {
 type Feature struct {
 	Type string `json:"$type"` // app.bsky.richtext.facet#link, #mention or #tag
 	URI  string `json:"uri"`
-	DID  string `json:"did"`
-	Tag  string `json:"tag"`
+	DID  string `json:"did,omitempty"`
+	Tag  string `json:"tag,omitempty"`
 }
 
 // Embed types.
@@ -139,7 +139,8 @@ type Video struct {
 
 // Blob is a reference to an uploaded file (image).
 type Blob struct {
-	Ref struct {
+	Type string `json:"$type,omitempty"`
+	Ref  struct {
 		Link string `json:"$link"` // the blob's CID
 	} `json:"ref"`
 	MIMEType string `json:"mimeType"`

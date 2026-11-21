@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
@@ -35,7 +36,7 @@ func TestRepairAtAnyAgePreservesDocument(t *testing.T) {
 	f.Put(pds.DocumentCollection, "key", jsontext.Value(docJSON))
 	cid := f.Put(pds.PostCollection, "key", jsontext.Value(postJSON))
 	var logs bytes.Buffer
-	r := syndicate.New(articles{{URI: docURI, Slug: "old"}}, c, did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil)))
+	r := syndicate.New(articles{{URI: docURI, Slug: "old"}}, c, did, publication, origin, pdstest.Password, slog.New(slog.NewTextHandler(&logs, nil)), time.Now)
 	r.Run(t.Context())
 	doc, err := c.GetDocument(t.Context(), did, "key")
 	if err != nil {

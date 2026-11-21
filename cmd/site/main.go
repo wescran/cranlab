@@ -37,8 +37,8 @@ func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), 
 		return db.RefreshPosts(ctx, client, full)
 	}
 	if cfg.AppPassword != "" {
-		repair := syndicate.New(db, client, cfg.DID, cfg.PublicationURI, cfg.SiteURL, cfg.AppPassword, slog.Default())
-		refresh = afterRefresh(refresh, repair.Run)
+		runner := syndicate.New(db, client, cfg.DID, cfg.PublicationURI, cfg.SiteURL, cfg.AppPassword, slog.Default(), time.Now)
+		refresh = afterRefresh(refresh, runner.Run)
 	}
 	stop := store.StartSync(ctx, client.SubscribeRepos, refresh)
 	return h, func() { stop(); db.Close() }, nil

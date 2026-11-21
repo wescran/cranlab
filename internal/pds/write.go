@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -20,11 +21,15 @@ func (c *Client) procedure(ctx context.Context, method, token string, input, out
 	if err != nil {
 		return fmt.Errorf("%s: invalid input", method)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/xrpc/"+method, bytes.NewReader(data))
+	return c.send(ctx, method, token, "application/json", bytes.NewReader(data), output)
+}
+
+func (c *Client) send(ctx context.Context, method, token, mediaType string, body io.Reader, output any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/xrpc/"+method, body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", mediaType)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -65,6 +70,28 @@ func (c *Client) CreateSession(ctx context.Context, did, password string) (strin
 		return "", errors.New("unexpected session identity or missing token")
 	}
 	return session.AccessJWT, nil
+}
+
+// UploadBlob returns the PDS blob reference suitable for a post thumbnail.
+func (c *Client) UploadBlob(ctx context.Context, token, mediaType string, data []byte) (Blob, error) {
+	var result struct {
+		Blob Blob `json:"blob"`
+	}
+	err := c.send(ctx, "com.atproto.repo.uploadBlob", token, mediaType, bytes.NewReader(data), &result)
+	if err == nil && (result.Blob.Type != "blob" || result.Blob.Ref.Link == "" || result.Blob.MIMEType != mediaType || result.Blob.Size != len(data)) {
+		err = errors.New("unexpected uploadBlob result")
+	}
+	return result.Blob, err
+}
+
+// CreatePost never replaces a record that won a race for the same key.
+func (c *Client) CreatePost(ctx context.Context, token, did, key string, post map[string]any) (StrongRef, error) {
+	var result StrongRef
+	err := c.procedure(ctx, "com.atproto.repo.createRecord", token, map[string]any{"repo": did, "collection": PostCollection, "rkey": key, "record": post}, &result)
+	if err == nil && (result.URI != "at://"+did+"/"+PostCollection+"/"+key || result.CID == "") {
+		err = errors.New("unexpected createRecord result")
+	}
+	return result, err
 }
 
 // LinkDocument patches only bskyPostRef, conditional on the exact version read.

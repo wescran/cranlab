@@ -77,6 +77,8 @@ func New(t testing.TB, did string) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /xrpc/com.atproto.server.createSession", s.createSession)
 	mux.HandleFunc("POST /xrpc/com.atproto.repo.putRecord", s.putRecord)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.createRecord", s.createRecord)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.uploadBlob", s.uploadBlob)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.listRecords", s.listRecords)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.getRecord", s.getRecord)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.getBlob", s.getBlob)
