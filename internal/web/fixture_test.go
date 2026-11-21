@@ -46,7 +46,7 @@ func newFixture(t *testing.T) *fixture {
 			"$type": "at.markpub.markdown", "flavor": "gfm",
 			"text": map[string]any{"$type": "at.markpub.text", "markdown": "## Hi\n\n![a cat](https://weslandia.ca/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Aogl52fc2rdooori2ayf74can&cid=" + catCID + ")\n"},
 		},
-		"coverImage": map[string]any{"$type": "blob", "ref": map[string]string{"$link": catCID}, "mimeType": "image/png", "size": 3},
+		"coverImage":  map[string]any{"$type": "blob", "ref": map[string]string{"$link": catCID}, "mimeType": "image/png", "size": 3},
 		"bskyPostRef": map[string]string{"uri": "at://" + testDID + "/app.bsky.feed.post/3mwelcome", "cid": "bafyreipost"},
 	})
 	fake.Put(pds.DocumentCollection, "3mhomelab", map[string]any{
@@ -101,7 +101,7 @@ func startFixture(t *testing.T, fake *pdstest.Server, expectRefresh bool) *fixtu
 	t.Helper()
 	cfg := testConfig()
 	client := pds.New(fake.URL, fake.Client())
-	s, err := store.Open(filepath.Join(t.TempDir(), "cache.db"), cfg.DID, cfg.PublicationURI)
+	s, err := store.Open(filepath.Join(t.TempDir(), "cache.db"), cfg.DID, cfg.PublicationURI, cfg.SiteURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,8 +109,11 @@ func startFixture(t *testing.T, fake *pdstest.Server, expectRefresh bool) *fixtu
 	if err := s.RefreshArticles(t.Context(), client); (err == nil) != expectRefresh {
 		t.Fatalf("startup refresh: %v", err)
 	}
+	if err := s.RefreshPosts(t.Context(), client, true); (err == nil) != expectRefresh {
+		t.Fatalf("posts refresh: %v", err)
+	}
 	h, err := New(cfg, Deps{
-		Store: s, PDS: client,
+		Store: s, Blobs: client,
 		Now: func() time.Time { return time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {

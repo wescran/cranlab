@@ -1,9 +1,6 @@
 package content
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -86,172 +83,34 @@ func post(rkey, text string, reply bool) pds.Record[pds.Post] {
 }
 
 func TestIsNote(t *testing.T) {
-	ann := Announcements([]pds.Record[pds.Document]{doc("3mart", "/articles/a", "")})
-	if !ann["3mart"] || len(ann) != 1 {
-		t.Errorf("Announcements = %v", ann)
+	d := doc("article", "/articles/a", "")
+	d.Value.BskyPostRef = &pds.StrongRef{URI: post("linked", "", false).URI}
+	ann := Announcements(Articles([]pds.Record[pds.Document]{d}, publication))
+	const site = "https://cranlab.ca"
+	topLevel := post("nullable", "hi", false)
+	topLevel.Value.Reply = []byte("null")
+	if !IsNote(topLevel, ann, site) {
+		t.Error("null reply is not a reply reference")
 	}
-	if !IsNote(post("3mpost", "hi", false), ann) {
-		t.Error("a top-level post is a note")
-	}
-	if IsNote(post("3mreply", "hi", true), ann) {
-		t.Error("a reply isn't a note")
-	}
-	if IsNote(post("3mart", "New article", false), ann) {
-		t.Error("an announcement isn't a note")
-	}
-}
-
-// lister serves posts newest first in pages, like listRecords: the cursor is
-// the record key of the last post returned, returned with every non-empty
-// page.
-type lister struct {
-	posts []pds.Record[pds.Post] // newest first
-	calls []string               // cursors requested
-	err   error
-}
-
-func (l *lister) ListPosts(_ context.Context, _ string, cursor string, limit int) ([]pds.Record[pds.Post], string, error) {
-	l.calls = append(l.calls, cursor)
-	if l.err != nil {
-		return nil, "", l.err
-	}
-	if limit < 1 || limit > 100 {
-		return nil, "", fmt.Errorf("limit %d out of range", limit)
-	}
-	start := 0
-	if cursor != "" {
-		for start < len(l.posts) && pds.RKey(l.posts[start].URI) >= cursor {
-			start++
+	for _, tc := range []struct {
+		key, link   string
+		reply, note bool
+	}{
+		{"post", "", false, true}, {"reply", "", true, false}, {"article", "", false, false}, {"linked", "", false, false},
+		{"manual", site + "/articles/manual", false, false},
+		{"port", "https://CRANLAB.ca:443/articles/a?x=y", false, false},
+		{"lookalike", "https://cranlab.ca.example/articles/a", false, true},
+		{"http", "http://cranlab.ca/articles/a", false, true},
+		{"path", site + "/articles-other/a", false, true},
+		{"escaped", site + "/articles%2Fnot-a-route", false, true},
+	} {
+		p := post(tc.key, "hi", tc.reply)
+		if tc.link != "" {
+			p.Value.Embed = &pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: tc.link}}
 		}
-	}
-	end := min(start+limit, len(l.posts))
-	page := l.posts[start:end]
-	if len(page) == 0 {
-		return page, "", nil
-	}
-	return page, pds.RKey(page[len(page)-1].URI), nil
-}
-
-// posts makes count posts with descending record keys "3m0999", "3m0998", …;
-// every replyEvery-th is a reply (0: none).
-func makePosts(count, replyEvery int) []pds.Record[pds.Post] {
-	var out []pds.Record[pds.Post]
-	for i := range count {
-		rkey := fmt.Sprintf("3m%04d", 9999-i)
-		out = append(out, post(rkey, rkey, replyEvery > 0 && i%replyEvery == replyEvery-1))
-	}
-	return out
-}
-
-func rkeys(posts []pds.Record[pds.Post]) []string {
-	out := []string{}
-	for _, p := range posts {
-		out = append(out, pds.RKey(p.URI))
-	}
-	return out
-}
-
-func TestNotesFirstPage(t *testing.T) {
-	l := &lister{posts: makePosts(50, 0)}
-	notes, cursor, err := Notes(context.Background(), l, did, nil, "", 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 20 || pds.RKey(notes[0].URI) != "3m9999" || pds.RKey(notes[19].URI) != "3m9980" {
-		t.Fatalf("notes = %v", rkeys(notes))
-	}
-	if cursor != "3m9980" {
-		t.Errorf("cursor = %q, want the last note's record key", cursor)
-	}
-}
-
-func TestNotesContinuesFromCursor(t *testing.T) {
-	l := &lister{posts: makePosts(50, 0)}
-	first, cursor, _ := Notes(context.Background(), l, did, nil, "", 20)
-	second, _, err := Notes(context.Background(), l, did, nil, cursor, 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(second) != 20 || pds.RKey(second[0].URI) != "3m9979" {
-		t.Errorf("second page = %v", rkeys(second))
-	}
-	seen := map[string]bool{}
-	for _, p := range append(first, second...) {
-		if seen[p.URI] {
-			t.Errorf("%s returned twice", p.URI)
+		if got := IsNote(p, ann, site); got != tc.note {
+			t.Errorf("%s: IsNote = %v", tc.key, got)
 		}
-		seen[p.URI] = true
-	}
-}
-
-func TestNotesSkipsRepliesAndAnnouncements(t *testing.T) {
-	posts := makePosts(30, 3) // every third is a reply
-	ann := map[string]bool{"3m9999": true}
-	l := &lister{posts: posts}
-	notes, _, err := Notes(context.Background(), l, did, ann, "", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"3m9998", "3m9996", "3m9995", "3m9993", "3m9992"}
-	if !reflect.DeepEqual(rkeys(notes), want) {
-		t.Errorf("notes = %v, want %v", rkeys(notes), want)
-	}
-}
-
-func TestNotesReadsMorePagesToFillOne(t *testing.T) {
-	// 150 posts, only every 10th a note: 20 notes need two pages of 100.
-	var posts []pds.Record[pds.Post]
-	for i, p := range makePosts(150, 0) {
-		if i%10 != 0 {
-			p.Value.Reply = []byte(`{}`)
-		}
-		posts = append(posts, p)
-	}
-	l := &lister{posts: posts}
-	notes, cursor, err := Notes(context.Background(), l, did, nil, "", 15)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 15 || len(l.calls) != 2 || cursor != pds.RKey(notes[14].URI) {
-		t.Errorf("got %d notes in %d calls, cursor %q", len(notes), len(l.calls), cursor)
-	}
-}
-
-func TestNotesRunsOut(t *testing.T) {
-	l := &lister{posts: makePosts(7, 0)}
-	notes, cursor, err := Notes(context.Background(), l, did, nil, "", 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 7 || cursor != "" {
-		t.Errorf("got %d notes, cursor %q; want 7 and no cursor", len(notes), cursor)
-	}
-}
-
-func TestNotesGivesUpAfterTooManyPages(t *testing.T) {
-	var posts []pds.Record[pds.Post]
-	for _, p := range makePosts(2000, 0) {
-		p.Value.Reply = []byte(`{}`) // nothing but replies
-		posts = append(posts, p)
-	}
-	l := &lister{posts: posts}
-	notes, cursor, err := Notes(context.Background(), l, did, nil, "", 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 0 || len(l.calls) != 10 {
-		t.Errorf("got %d notes in %d calls, want 0 in 10", len(notes), len(l.calls))
-	}
-	if cursor == "" {
-		t.Error("want a cursor to continue from, since posts remain")
-	}
-}
-
-func TestNotesError(t *testing.T) {
-	boom := errors.New("boom")
-	_, _, err := Notes(context.Background(), &lister{err: boom}, did, nil, "", 20)
-	if !errors.Is(err, boom) {
-		t.Errorf("err = %v, want the lister's error", err)
 	}
 }
 

@@ -23,7 +23,8 @@
   <div class="e-content">{{.Text}}</div>
   {{with .Embed}}{{template "embed" .}}{{end}}
   <p class="note-meta">
-    <a class="u-url" href="{{.URL}}"><time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time></a>
+    <a class="p-author h-card" href="{{.AuthorURL}}">Wesley Cranston</a>
+    <a class="u-url" href="{{.URL}}">{{with .Published}}<time class="dt-published" datetime="{{datetime .}}">{{date .}}</time>{{else}}Permalink{{end}}</a>
     <a class="u-syndication" href="{{.BlueskyURL}}">View on Bluesky</a>
   </p>
 </article>

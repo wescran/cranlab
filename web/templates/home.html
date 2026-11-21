@@ -16,17 +16,10 @@
     </header>
   </section>
 
-  {{- with .Data.Latest}}
+  {{- with .Data.Articles}}
   <section class="latest">
-    <h2>Latest Article</h2>
-    <article class="h-entry">
-      <h3 class="p-name"><a class="u-url" href="{{.URL}}">{{.Title}}</a></h3>
-      <p class="byline">
-        <time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>
-        <span>{{.ReadingTime}} min read</span>
-      </p>
-      {{with .Description}}<p class="p-summary">{{.}}</p>{{end}}
-    </article>
+    <h2>Recent Articles</h2>
+    {{range .}}{{template "article-summary" .}}{{end}}
   </section>
   {{- end}}
 

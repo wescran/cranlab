@@ -5,12 +5,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/wescran/cranlab/internal/content"
-	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/render"
 )
 
@@ -22,9 +20,6 @@ const (
 	notesPerPage = 20
 	homeNotes    = 5
 )
-
-// rkeyPattern is the record key syntax (atproto's "record-key" format).
-var rkeyPattern = regexp.MustCompile(`^[A-Za-z0-9._:~-]{1,512}$`)
 
 // pdsContext returns the request's context, bounded by pdsTimeout.
 func (s *server) pdsContext(r *http.Request) (context.Context, context.CancelFunc) {
@@ -74,20 +69,31 @@ func summaries(articles []content.Article) []ArticleSummary {
 	return out
 }
 
-// noteView describes a post: URL "/notes/<rkey>", text with facets
-// (render.Facets), CreatedAt parsed (RFC 3339; zero if invalid), embed
-// (render.EmbedView) and its bsky.app URL.
-func noteView(p pds.Record[pds.Post]) NoteView {
-	panic("not implemented")
+func (s *server) noteView(n content.Note) NoteView {
+	return NoteView{URL: "/notes/" + url.PathEscape(n.RKey), Text: render.Facets(n.Text, n.Facets), Published: n.Published, Embed: render.EmbedView(n.Embed, n.URI), BlueskyURL: render.PostURL(n.URI), AuthorURL: s.cfg.SiteURL + "/"}
 }
 
-// noteViews describes each post, keeping their order.
-func noteViews(posts []pds.Record[pds.Post]) []NoteView {
-	panic("not implemented")
+func (s *server) noteViews(notes []content.Note) []NoteView {
+	views := make([]NoteView, 0, len(notes))
+	for _, n := range notes {
+		views = append(views, s.noteView(n))
+	}
+	return views
 }
 
 func (s *server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "home", http.StatusOK, Page{Description: "CranLab by Wesley Cranston", Data: HomePage{}})
+	articles, err := s.deps.Store.Articles(r.Context())
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	notes, _, err := s.deps.Store.Notes(r.Context(), "", homeNotes)
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	data := HomePage{Articles: summaries(articles[:min(5, len(articles))]), Notes: s.noteViews(notes)}
+	s.render(w, r, "home", http.StatusOK, Page{Description: "CranLab by Wesley Cranston", Data: data})
 }
 
 // articles lists every article. Title "Articles", description "Articles by
@@ -130,21 +136,40 @@ func (s *server) article(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "article", http.StatusOK, page)
 }
 
-// notes lists notesPerPage notes, starting after ?cursor= (ignored unless it
-// matches rkeyPattern, so junk never reaches the PDS). OlderURL is
-// "/notes?cursor=<next, query-escaped>" when there may be more. Title
-// "Notes", description "Notes by Wesley Cranston". A PDS error is a 503.
 func (s *server) notes(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	notes, next, err := s.deps.Store.Notes(r.Context(), r.URL.Query().Get("cursor"), notesPerPage)
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	data := NotesPage{Notes: s.noteViews(notes)}
+	if next != "" {
+		data.OlderURL = "/notes?cursor=" + url.QueryEscape(next)
+	}
+	s.render(w, r, "notes", http.StatusOK, Page{Title: "Notes", Description: "Notes by Wesley Cranston", Data: data})
 }
 
-// note shows the post {rkey} if it's a note. An rkey not matching
-// rkeyPattern, a missing post (pds.ErrNotFound), a reply or an announcement
-// is the 404 page; another PDS error is a 503. Title: the first 60
-// characters of the text (render.Excerpt), or "Note" if empty; description:
-// the first 160.
 func (s *server) note(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	key := r.PathValue("rkey")
+	if !content.ValidRKey(key) {
+		s.renderError(w, r, http.StatusNotFound)
+		return
+	}
+	n, ok, err := s.deps.Store.FindNote(r.Context(), key)
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	if !ok {
+		s.renderError(w, r, http.StatusNotFound)
+		return
+	}
+	title := render.Excerpt(n.Text, 60)
+	if title == "" {
+		title = "Note"
+	}
+	view := s.noteView(n)
+	s.render(w, r, "note", http.StatusOK, Page{Title: title, Description: render.Excerpt(n.Text, 160), Data: view, CanonicalURL: s.cfg.SiteURL + view.URL})
 }
 
 // tags lists every tag with its count. Title "Tags", description "Article

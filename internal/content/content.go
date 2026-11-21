@@ -4,8 +4,8 @@ package content
 
 import (
 	"cmp"
-	"context"
 	"maps"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -86,39 +86,58 @@ func FindArticle(articles []Article, slug string) (Article, bool) {
 	return Article{}, false
 }
 
-// Announcements returns the record keys of docs. A post with the same record
-// key as a document is that document's announcement on Bluesky.
-func Announcements(docs []pds.Record[pds.Document]) map[string]bool {
-	panic("not implemented")
+// Announcements indexes both the deterministic key and the exact referenced URI
+// of every published Article. This display filter is not proof for a write.
+func Announcements(articles []Article) map[string]bool {
+	refs := make(map[string]bool)
+	for _, a := range articles {
+		owner, _, _ := strings.Cut(strings.TrimPrefix(a.URI, "at://"), "/")
+		refs["at://"+owner+"/"+pds.PostCollection+"/"+pds.RKey(a.URI)] = true
+		if a.AnnouncementURI != "" {
+			refs[a.AnnouncementURI] = true
+		}
+	}
+	return refs
 }
 
-// IsNote reports whether a post is shown as a note: it isn't a reply and
-// isn't an announcement.
-func IsNote(p pds.Record[pds.Post], announcements map[string]bool) bool {
-	panic("not implemented")
+func IsNote(p pds.Record[pds.Post], announcements map[string]bool, siteURL string) bool {
+	if (len(p.Value.Reply) > 0 && p.Value.Reply.Kind() != 'n') || announcements[p.URI] {
+		return false
+	}
+	e := p.Value.Embed
+	if e != nil && e.Type == pds.EmbedRecordWithMedia {
+		e = e.Media
+	}
+	if e == nil || e.Type != pds.EmbedExternal || e.External == nil {
+		return true
+	}
+	return !articleLink(e.External.URI, siteURL)
 }
 
-// PostLister lists posts one page at a time (satisfied by *pds.Client).
-type PostLister interface {
-	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
+func articleLink(raw, siteURL string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	site, err := url.Parse(siteURL)
+	if err != nil || site.Hostname() == "" || u.Scheme != site.Scheme || !strings.EqualFold(u.Hostname(), site.Hostname()) || port(u) != port(site) {
+		return false
+	}
+	// Match route segments before unescaping: an encoded slash is not a route separator.
+	dir, segment, ok := strings.Cut(strings.TrimPrefix(strings.TrimSuffix(u.EscapedPath(), "/"), "/"), "/")
+	dir, _ = url.PathUnescape(dir)
+	slug, _ := url.PathUnescape(segment)
+	return ok && dir == "articles" && slug != "" && slug != "." && slug != ".." && !strings.Contains(slug, "/")
 }
 
-// maxNotePages bounds how many pages Notes reads to fill one page of notes,
-// in case most posts are replies.
-const maxNotePages = 10
-
-// Notes returns up to n notes, newest first, starting after cursor ("" for
-// the newest), and the cursor to continue from.
-//
-// It reads pages of posts (limit 100) and keeps the notes, until it has n,
-// a page is empty, the PDS returns no cursor, or it has read maxNotePages
-// pages. The returned cursor is "" when the posts ran out; otherwise it's
-// where to continue: the record key of the last note returned (when n were
-// found), or the last page's cursor (when it gave up).
-// A listRecords cursor is a record key, so the next call continues right
-// after that note even if it stopped partway through a page.
-func Notes(ctx context.Context, l PostLister, did string, announcements map[string]bool, cursor string, n int) ([]pds.Record[pds.Post], string, error) {
-	panic("not implemented")
+func port(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if u.Scheme == "https" {
+		return "443"
+	}
+	return "80"
 }
 
 // TagCount is a tag and how many articles have it.
