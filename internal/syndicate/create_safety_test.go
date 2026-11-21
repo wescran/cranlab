@@ -20,10 +20,16 @@ func TestFailedLinkRepairsNextDayAndNeverRewritesPost(t *testing.T) {
 	r := syndicate.New(source, c, did, publication, origin, pdstest.Password, slog.Default(), func() time.Time { return now })
 	f.Respond("com.atproto.repo.putRecord", "", 503, `{}`)
 	r.Run(t.Context())
-	// A public lookup of the deterministic post must precede its creation.
-	checked, created := false, false
+	// The repo precondition must bracket the public reads and creation.
+	pinned, checked, created := false, false, false
 	for _, u := range f.Requests() {
 		q := u.Query()
+		if u.Path == "/xrpc/com.atproto.sync.getLatestCommit" && q.Get("did") == did {
+			pinned = true
+		}
+		if u.Path == "/xrpc/com.atproto.repo.getRecord" && !pinned {
+			t.Fatal("read before capturing repo commit")
+		}
 		if u.Path == "/xrpc/com.atproto.repo.getRecord" && q.Get("collection") == pds.PostCollection && q.Get("rkey") == "old" && q.Get("repo") == did {
 			checked = true
 		}
@@ -74,7 +80,7 @@ func TestUncertainLookupNeverCreates(t *testing.T) {
 	f.Respond("com.atproto.repo.getRecord", "", 503, `{"error":"Unavailable"}`)
 	syndicate.New(articles{a}, c, did, publication, origin, pdstest.Password, slog.Default(), func() time.Time { return daySeven }).Run(t.Context())
 	for _, u := range f.Requests() {
-		if u.Path != "/xrpc/com.atproto.repo.getRecord" {
+		if u.Path != "/xrpc/com.atproto.repo.getRecord" && u.Path != "/xrpc/com.atproto.sync.getLatestCommit" {
 			t.Fatal("unexpected request:", u)
 		}
 	}
@@ -96,6 +102,38 @@ func TestConcurrentPostAtArticleKeyIsNotOverwritten(t *testing.T) {
 	doc, err := c.GetDocument(t.Context(), did, "old")
 	if err != nil || doc.Value.BskyPostRef != nil {
 		t.Fatalf("incorrect link: %s (%v)", doc.Raw, err)
+	}
+}
+
+func TestCreateRevalidatesConcurrentArticleChange(t *testing.T) {
+	for _, change := range []string{"unpublish", "edit", "link"} {
+		t.Run(change, func(t *testing.T) {
+			f := pdstest.New(t, did)
+			c := pds.New(f.URL, nil)
+			d := document("old", "2026-11-08T01:00:00Z")
+			a := seed(f, "old", d)
+			racing := concurrentEdit{c, func() {
+				switch change {
+				case "unpublish":
+					f.Delete(pds.DocumentCollection, "old")
+				case "edit":
+					d.Title = "Corrected title"
+					f.Put(pds.DocumentCollection, "old", d)
+				case "link":
+					d.BskyPostRef = &pds.StrongRef{URI: postURI, CID: "other"}
+					f.Put(pds.DocumentCollection, "old", d)
+				}
+			}}
+			syndicate.New(articles{a}, racing, did, publication, origin, pdstest.Password, slog.Default(), func() time.Time { return daySeven }).Run(t.Context())
+			post, err := c.GetPost(t.Context(), did, "old")
+			if change == "edit" {
+				if err != nil || post.Value.Text != "Corrected title\n\n"+articleURL {
+					t.Fatalf("expected fresh Announcement: %q (%v)", post.Value.Text, err)
+				}
+			} else if !errors.Is(err, pds.ErrNotFound) {
+				t.Fatalf("stale Announcement after %s: %q (%v)", change, post.Value.Text, err)
+			}
+		})
 	}
 }
 

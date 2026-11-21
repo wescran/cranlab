@@ -41,6 +41,18 @@ func (s *Server) uploadBlob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"blob": map[string]any{"$type": "blob", "ref": map[string]string{"$link": cid}, "mimeType": mime, "size": len(data)}})
 }
 
+func (s *Server) commitCIDLocked() string { return fmt.Sprintf("fixture-commit-%d", s.revision) }
+
+func (s *Server) latestCommit(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("did") != s.DID {
+		xrpcError(w, 400, "RepoNotFound", "unknown DID")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	writeJSON(w, map[string]string{"cid": s.commitCIDLocked(), "rev": fmt.Sprint(s.revision)})
+}
+
 func (s *Server) createRecord(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+AccessJWT {
 		xrpcError(w, 401, "AuthenticationRequired", "invalid token")
@@ -50,6 +62,7 @@ func (s *Server) createRecord(w http.ResponseWriter, r *http.Request) {
 		Repo       string         `json:"repo"`
 		Collection string         `json:"collection"`
 		RKey       string         `json:"rkey"`
+		SwapCommit string         `json:"swapCommit"`
 		Record     jsontext.Value `json:"record"`
 	}
 	if json.UnmarshalRead(r.Body, &in) != nil || in.Repo != s.DID || in.Collection == "" || in.RKey == "" || in.Record.Kind() != '{' {
@@ -58,6 +71,10 @@ func (s *Server) createRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if in.SwapCommit != s.commitCIDLocked() {
+		xrpcError(w, 400, "InvalidSwap", "repo changed")
+		return
+	}
 	if _, exists := s.records[in.Collection][in.RKey]; exists {
 		xrpcError(w, 400, "InvalidRequest", "record already exists")
 		return
