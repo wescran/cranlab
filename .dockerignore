@@ -4,4 +4,6 @@
 docs/
 site
 .DS_Store
+cache.db
+cache.db-*
 

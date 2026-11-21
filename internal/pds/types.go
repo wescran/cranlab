@@ -36,6 +36,20 @@ type Document struct {
 	BskyPostRef *StrongRef     `json:"bskyPostRef"`
 }
 
+// Markdown returns authored Markdown only for at.markpub.markdown content.
+func (d Document) Markdown() *string {
+	var body struct {
+		Type string `json:"$type"`
+		Text struct {
+			Markdown *string `json:"markdown"`
+		} `json:"text"`
+	}
+	if json.Unmarshal(d.Content, &body) != nil || body.Type != "at.markpub.markdown" {
+		return nil
+	}
+	return body.Text.Markdown
+}
+
 // Post is an app.bsky.feed.post record.
 type Post struct {
 	Text      string   `json:"text"`

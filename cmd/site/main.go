@@ -11,8 +11,29 @@ import (
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
+	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/store"
 	"github.com/wescran/cranlab/internal/web"
 )
+
+// siteHandler opens the disposable read model and attempts one complete backfill.
+// An upstream outage is not a reason to stop serving the last good snapshot.
+func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), error) {
+	db, err := store.Open(cfg.CacheDBPath, cfg.DID, cfg.PublicationURI)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open cache: %w", err)
+	}
+	client := pds.New(cfg.PDSURL, nil)
+	if err := db.RefreshArticles(ctx, client); err != nil {
+		slog.Warn("startup article refresh failed", "err", err)
+	}
+	h, err := web.New(cfg, web.Deps{Store: db, PDS: client})
+	if err != nil {
+		db.Close()
+		return nil, nil, err
+	}
+	return h, func() { db.Close() }, nil
+}
 
 func run() error {
 	logger := slog.Default()
@@ -23,10 +44,13 @@ func run() error {
 	if cfg.AppPassword == "" {
 		logger.Info("No APP_PASSWORD configured, syndication disabled")
 	}
-	serverHandler, err := web.New(cfg, web.Deps{})
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	serverHandler, closeStore, err := siteHandler(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}
+	defer closeStore()
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
 		ReadTimeout:       10 * time.Second,
@@ -36,8 +60,6 @@ func run() error {
 		Handler:           serverHandler,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.ListenAndServe()

@@ -3,7 +3,11 @@
 package content
 
 import (
+	"cmp"
 	"context"
+	"maps"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
@@ -14,24 +18,72 @@ const ArticlePrefix = "/articles/"
 
 // Article is a document published on the site.
 type Article struct {
-	Record pds.Record[pds.Document]
+	URI, Title, Description, TextContent string
+	AnnouncementURI, CoverCID            string
+	Tags                                 []string
+	Markdown                             *string
+	HasPublished                         bool
 	// Slug is the last part of the article's path ("/articles/<slug>").
 	Slug string
 	// Published is PublishedAt parsed; zero if it isn't a valid timestamp.
 	Published time.Time
 }
 
-// Articles returns the documents that are articles of publication: those
+// Articles projects the owner's documents from a validated PDS listing. It selects those
 // whose Site is publication and whose Path is "/articles/<slug>" with a
 // non-empty slug and no further "/". They're sorted newest first by
 // Published, then by Slug.
 func Articles(docs []pds.Record[pds.Document], publication string) []Article {
-	panic("not implemented")
+	var articles []Article
+	for _, r := range docs {
+		d := r.Value
+		slug, ok := strings.CutPrefix(d.Path, ArticlePrefix)
+		if d.Site != publication || !ok || slug == "" || strings.Contains(slug, "/") {
+			continue
+		}
+		date, err := time.Parse(time.RFC3339, d.PublishedAt)
+		a := Article{
+			Slug: slug, Published: date, HasPublished: err == nil,
+			URI: r.URI, Title: d.Title, Description: d.Description,
+			TextContent: d.TextContent, Markdown: d.Markdown(),
+		}
+		if d.BskyPostRef != nil {
+			a.AnnouncementURI = d.BskyPostRef.URI
+		}
+		if d.CoverImage != nil {
+			a.CoverCID = d.CoverImage.Ref.Link
+		}
+		seen := map[string]bool{}
+		for _, raw := range d.Tags {
+			tag := strings.ToLower(strings.TrimSpace(raw))
+			if tag != "" && !seen[tag] {
+				seen[tag] = true
+				a.Tags = append(a.Tags, tag)
+			}
+		}
+		slices.Sort(a.Tags)
+		articles = append(articles, a)
+	}
+	slices.SortFunc(articles, func(a, b Article) int {
+		if a.HasPublished != b.HasPublished {
+			if a.HasPublished {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Or(b.Published.Compare(a.Published), strings.Compare(a.Slug, b.Slug))
+	})
+	return articles
 }
 
 // FindArticle returns the article with this slug.
 func FindArticle(articles []Article, slug string) (Article, bool) {
-	panic("not implemented")
+	for _, a := range articles {
+		if a.Slug == slug {
+			return a, true
+		}
+	}
+	return Article{}, false
 }
 
 // Announcements returns the record keys of docs. A post with the same record
@@ -77,10 +129,26 @@ type TagCount struct {
 
 // Tags counts the articles' tags, sorted by tag (case-insensitively).
 func Tags(articles []Article) []TagCount {
-	panic("not implemented")
+	counts := map[string]int{}
+	for _, a := range articles {
+		for _, tag := range a.Tags {
+			counts[tag]++
+		}
+	}
+	var out []TagCount
+	for _, tag := range slices.Sorted(maps.Keys(counts)) {
+		out = append(out, TagCount{tag, counts[tag]})
+	}
+	return out
 }
 
 // WithTag returns the articles that have tag, keeping their order.
 func WithTag(articles []Article, tag string) []Article {
-	panic("not implemented")
+	var out []Article
+	for _, a := range articles {
+		if slices.Contains(a.Tags, tag) {
+			out = append(out, a)
+		}
+	}
+	return out
 }

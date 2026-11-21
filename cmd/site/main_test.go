@@ -1,0 +1,56 @@
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/wescran/cranlab/internal/config"
+	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/pds/pdstest"
+)
+
+func TestStartupBackfill(t *testing.T) {
+	const did = "did:plc:owner"
+	fake := pdstest.New(t, did)
+	cfg := config.Config{DID: did, PublicationURI: "at://" + did + "/site.standard.publication/abc", PDSURL: fake.URL, CacheDBPath: filepath.Join(t.TempDir(), "cache.db")}
+	start := func() (http.Handler, func()) {
+		t.Helper()
+		h, close, err := siteHandler(t.Context(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h, close
+	}
+	check := func(h http.Handler, path string, want int, contains string) {
+		t.Helper()
+		r := httptest.NewRecorder()
+		h.ServeHTTP(r, httptest.NewRequest("GET", path, nil))
+		if r.Code != want || !strings.Contains(r.Body.String(), contains) {
+			t.Fatalf("GET %s = %d, want %d containing %q", path, r.Code, want, contains)
+		}
+	}
+	fake.FailWith(503)
+	h, close := start()
+	check(h, "/articles/welcome", 503, "Temporarily unavailable")
+	close()
+	fake.FailWith(0)
+	fake.Put(pds.DocumentCollection, "doc", pds.Document{Site: cfg.PublicationURI, Path: "/articles/welcome", Title: "Welcome back", Tags: []string{" Intro ", "INTRO"}})
+	h, close = start()
+	check(h, "/articles/welcome", 200, "Welcome back")
+	close()
+	fake.FailWith(503)
+	h, close = start()
+	defer close()
+	before := len(fake.Requests())
+	check(h, "/articles", 200, "Welcome back")
+	check(h, "/articles/welcome", 200, "Welcome back")
+	check(h, "/tags", 200, `intro <span>1</span>`)
+	check(h, "/tags/intro", 200, "Welcome back")
+	check(h, "/articles/gone", 404, "Page Not Found")
+	if after := len(fake.Requests()); after != before {
+		t.Fatalf("page views made %d upstream requests", after-before)
+	}
+}

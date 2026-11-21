@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/wescran/cranlab/internal/pds/pdstest"
 )
 
 func (f *fixture) get(t *testing.T, target string) (int, string) {
@@ -240,17 +242,22 @@ func TestMediaRejectsBadCIDs(t *testing.T) {
 }
 
 func TestPDSDown(t *testing.T) {
-	f := newFixture(t)
-	f.pds.FailWith(http.StatusInternalServerError)
-	for _, path := range []string{"/", "/articles", "/articles/welcome", "/notes", "/notes/3n0025", "/tags", "/tags/writing"} {
-		code, body := f.get(t, path)
-		if code != http.StatusServiceUnavailable || !strings.Contains(strings.ToLower(body), "temporarily unavailable") {
-			t.Errorf("GET %s with the PDS down = %d, want the 503 page", path, code)
+	fake := pdstest.New(t, testDID)
+	fake.FailWith(http.StatusInternalServerError)
+	f := startFixture(t, fake, false)
+	for _, path := range []string{"/articles", "/articles/welcome", "/tags", "/tags/writing", "/", "/notes", "/notes/3n0025"} {
+		t.Run("GET"+path, func(t *testing.T) {
+			code, body := f.get(t, path)
+			if code != http.StatusServiceUnavailable || !strings.Contains(strings.ToLower(body), "temporarily unavailable") {
+				t.Errorf("GET %s with the PDS down = %d, want the 503 page", path, code)
+			}
+		})
+	}
+	t.Run("GET/media", func(t *testing.T) {
+		if rec := get(t, f.handler, "/media/"+catCID); rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("GET /media with the PDS down = %d, want 503 (not 404)", rec.Code)
 		}
-	}
-	if rec := get(t, f.handler, "/media/"+catCID); rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("GET /media with the PDS down = %d, want 503 (not 404)", rec.Code)
-	}
+	})
 	// Pages that don't use the PDS keep working.
 	if code, _ := f.get(t, "/about"); code != http.StatusOK {
 		t.Errorf("GET /about = %d", code)
