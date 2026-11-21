@@ -53,6 +53,21 @@ func TestArticlesPage(t *testing.T) {
 	mustContain(t, body, "Racks and cables.")
 }
 
+func TestArticleSummaryReadingLayout(t *testing.T) {
+	_, page := newFixture(t).get(t, "/articles")
+	for _, entry := range regexp.MustCompile(`(?s)<article\b.*?</article>`).FindAllString(page, -1) {
+		if !strings.Contains(entry, `href="/articles/welcome"`) {
+			continue
+		}
+		mustContain(t, entry, "September 28, 2026", "1 min read", "Hello there.")
+		if !regexp.MustCompile(`<h2[^>]*>\s*<a[^>]*>Welcome</a>\s*</h2>`).MatchString(entry) {
+			t.Error("summary title should be a linked heading")
+		}
+		return
+	}
+	t.Fatal("Welcome summary missing")
+}
+
 func TestArticlePage(t *testing.T) {
 	code, body := newFixture(t).get(t, "/articles/welcome")
 	if code != http.StatusOK {

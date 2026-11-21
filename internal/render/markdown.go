@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -51,7 +53,9 @@ func ArticleBody(markdown *string, textContent string, o Options) (template.HTML
 	}
 
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM, callouts{}),
+		goldmark.WithExtensions(extension.GFM, callouts{}, highlighting.NewHighlighting(
+			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+		)),
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(blobRewriter{o}, 100))),
 		goldmark.WithRendererOptions(html.WithUnsafe()),
 	)
