@@ -41,7 +41,7 @@ func summarize(a content.Article) ArticleSummary {
 		description = render.Excerpt(a.TextContent, 160)
 	}
 	return ArticleSummary{
-		URL: content.ArticlePrefix + url.PathEscape(a.Slug), Title: a.Title,
+		URL: a.PermalinkPath(), Title: a.Title,
 		Description: description, Published: a.Published, HasPublished: a.HasPublished,
 		ReadingTime: render.ReadingTime(a.TextContent), Tags: tagLinks(a.Tags),
 	}

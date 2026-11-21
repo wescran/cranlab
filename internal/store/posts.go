@@ -1,11 +1,9 @@
 package store
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"slices"
@@ -82,7 +80,11 @@ func (s *Store) RefreshPosts(ctx context.Context, source PostSource, full bool) 
 		if !content.ValidRKey(key) {
 			return fmt.Errorf("invalid post key %q", key)
 		}
-		n := content.Note{RKey: key, URI: p.URI, Text: p.Value.Text, Facets: p.Value.Facets, Embed: p.Value.Embed}
+		n := content.Note{
+			RKey: key, URI: p.URI, Text: p.Value.Text,
+			Facets: content.ProjectFacets(p.Value.Facets),
+			Embed:  content.ProjectEmbed(p.Value.Embed),
+		}
 		if date, err := time.Parse(time.RFC3339, p.Value.CreatedAt); err == nil {
 			utc := date.UTC()
 			if utc.Year() >= 0 && utc.Year() <= 9999 {
@@ -90,13 +92,13 @@ func (s *Store) RefreshPosts(ctx context.Context, source PostSource, full bool) 
 			}
 		}
 		// Store the domain projection; reads never replay XRPC decoding.
-		var data bytes.Buffer
-		if err := gob.NewEncoder(&data).Encode(n); err != nil {
+		data, err := encodeNote(n)
+		if err != nil {
 			return err
 		}
 		// Article references are applied at read time from the same transaction as
 		// the Article snapshot. Only reply/embed eligibility is intrinsic to a post.
-		if _, err := stmt.ExecContext(ctx, key, p.URI, dateKey(n), content.IsNote(p, nil, s.siteURL), data.Bytes()); err != nil {
+		if _, err := stmt.ExecContext(ctx, key, p.URI, dateKey(n), content.IsNote(p, nil, s.siteURL), data); err != nil {
 			return err
 		}
 	}
@@ -116,13 +118,11 @@ func (s *Store) readNotes(ctx context.Context, suffix string, args ...any) ([]co
 }
 
 func scanNote(rows *sql.Rows) (content.Note, error) {
-	var n content.Note
 	var raw []byte
 	if err := rows.Scan(&raw); err != nil {
-		return n, err
+		return content.Note{}, err
 	}
-	err := gob.NewDecoder(bytes.NewReader(raw)).Decode(&n)
-	return n, err
+	return decodeNote(raw)
 }
 
 func (s *Store) FindNote(ctx context.Context, key string) (content.Note, bool, error) {

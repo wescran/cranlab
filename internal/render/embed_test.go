@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
 )
 
@@ -16,11 +17,13 @@ func blob(cid string) pds.Blob {
 	return b
 }
 
+func postEmbed(e *pds.Embed, uri string) *Embed { return EmbedView(content.ProjectEmbed(e), uri) }
+
 func TestEmbedViewNil(t *testing.T) {
-	if v := EmbedView(nil, postURI); v != nil {
+	if v := postEmbed(nil, postURI); v != nil {
 		t.Errorf("EmbedView(nil) = %+v", v)
 	}
-	if v := EmbedView(&pds.Embed{Type: "app.bsky.embed.somethingNew"}, postURI); v != nil {
+	if v := postEmbed(&pds.Embed{Type: "app.bsky.embed.somethingNew"}, postURI); v != nil {
 		t.Errorf("unknown embed = %+v, want nil", v)
 	}
 }
@@ -30,7 +33,7 @@ func TestEmbedViewImages(t *testing.T) {
 		{Alt: "a cat", Image: blob("bafkreicat"), AspectRatio: &pds.AspectRatio{Width: 4, Height: 3}},
 		{Alt: "", Image: blob("bafkreidog")},
 	}}
-	got := EmbedView(e, postURI)
+	got := postEmbed(e, postURI)
 	want := &Embed{Images: []ImageView{
 		{URL: "/media/bafkreicat", Alt: "a cat", Width: 4, Height: 3},
 		{URL: "/media/bafkreidog"},
@@ -45,14 +48,14 @@ func TestEmbedViewExternal(t *testing.T) {
 	e := &pds.Embed{Type: pds.EmbedExternal, External: &pds.External{
 		URI: "https://example.com/post", Title: "<script>alert(1)</script>", Description: "A page.", Thumb: &thumb,
 	}}
-	got := EmbedView(e, postURI)
+	got := postEmbed(e, postURI)
 	want := &Embed{External: &ExternalView{
 		URL: "https://example.com/post", Title: "<script>alert(1)</script>", Description: "A page.", ThumbURL: "/media/bafkreithumb",
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("EmbedView =\n%+v\nwant\n%+v (text is left for the template to escape)", got, want)
 	}
-	noThumb := EmbedView(&pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: "https://example.com/"}}, postURI)
+	noThumb := postEmbed(&pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: "https://example.com/"}}, postURI)
 	if noThumb == nil || noThumb.External == nil || noThumb.External.ThumbURL != "" {
 		t.Errorf("without a thumb = %+v", noThumb)
 	}
@@ -61,7 +64,7 @@ func TestEmbedViewExternal(t *testing.T) {
 func TestEmbedViewExternalRejectsNonWebURL(t *testing.T) {
 	for _, uri := range []string{"javascript:alert(1)", "http:/path", "https://:443/path"} {
 		e := &pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: uri}}
-		if v := EmbedView(e, postURI); v != nil {
+		if v := postEmbed(e, postURI); v != nil {
 			t.Errorf("link card for %q = %+v, want nil", uri, v)
 		}
 	}
@@ -69,13 +72,13 @@ func TestEmbedViewExternalRejectsNonWebURL(t *testing.T) {
 
 func TestEmbedViewQuote(t *testing.T) {
 	e := &pds.Embed{Type: pds.EmbedRecord, Quote: &pds.StrongRef{URI: "at://did:plc:other/app.bsky.feed.post/3mquoted", CID: "bafyrei"}}
-	got := EmbedView(e, postURI)
+	got := postEmbed(e, postURI)
 	if got == nil || got.QuoteURL != "https://bsky.app/profile/did:plc:other/post/3mquoted" {
 		t.Errorf("EmbedView = %+v", got)
 	}
 	// Quoting something that isn't a post (a list, a feed) has nothing to link.
 	other := &pds.Embed{Type: pds.EmbedRecord, Quote: &pds.StrongRef{URI: "at://did:plc:other/app.bsky.graph.list/3mlist"}}
-	if v := EmbedView(other, postURI); v != nil {
+	if v := postEmbed(other, postURI); v != nil {
 		t.Errorf("quote of a list = %+v, want nil", v)
 	}
 }
@@ -86,7 +89,7 @@ func TestEmbedViewRecordWithMedia(t *testing.T) {
 		Quote: &pds.StrongRef{URI: "at://did:plc:other/app.bsky.feed.post/3mquoted"},
 		Media: &pds.Embed{Type: pds.EmbedImages, Images: []pds.Image{{Alt: "pic", Image: blob("bafkreipic")}}},
 	}
-	got := EmbedView(e, postURI)
+	got := postEmbed(e, postURI)
 	want := &Embed{
 		Images:   []ImageView{{URL: "/media/bafkreipic", Alt: "pic"}},
 		QuoteURL: "https://bsky.app/profile/did:plc:other/post/3mquoted",
@@ -97,7 +100,7 @@ func TestEmbedViewRecordWithMedia(t *testing.T) {
 }
 
 func TestEmbedViewVideo(t *testing.T) {
-	got := EmbedView(&pds.Embed{Type: pds.EmbedVideo, Video: &pds.Video{Alt: "a clip"}}, postURI)
+	got := postEmbed(&pds.Embed{Type: pds.EmbedVideo, Video: &pds.Video{Alt: "a clip"}}, postURI)
 	want := &Embed{VideoURL: "https://bsky.app/profile/did:plc:ogl52fc2rdooori2ayf74can/post/3mxc6hxwdnc2s", VideoAlt: "a clip"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("EmbedView = %+v, want %+v", got, want)

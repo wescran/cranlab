@@ -5,16 +5,14 @@ import (
 	"errors"
 	"regexp"
 	"time"
-
-	"github.com/wescran/cranlab/internal/pds"
 )
 
 // Note contains the fields needed for a public permalink, not the XRPC envelope.
 type Note struct {
 	RKey, URI, Text string
 	Published       *time.Time
-	Facets          []pds.Facet
-	Embed           *pds.Embed
+	Facets          []Facet
+	Embed           *NoteEmbed
 }
 
 var recordKey = regexp.MustCompile(`^[A-Za-z0-9._:~-]{1,512}$`)

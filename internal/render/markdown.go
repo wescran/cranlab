@@ -3,6 +3,7 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"net/url"
 	"strings"
@@ -62,7 +63,7 @@ func ArticleBody(markdown *string, textContent string, o Options) (template.HTML
 
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(*markdown), &buf); err != nil {
-		return template.HTML(""), err
+		return "", fmt.Errorf("render article Markdown: %w", err)
 	}
 	return template.HTML(buf.String()), nil
 }
