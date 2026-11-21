@@ -4,6 +4,7 @@ import (
 	"net/url"
 
 	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/weburl"
 )
 
 // Embed is what a post's embed looks like on a page. Templates escape every
@@ -48,7 +49,7 @@ func addEmbed(v *Embed, e *pds.Embed, postURI string) {
 			v.Images = append(v.Images, view)
 		}
 	case pds.EmbedExternal:
-		if x := e.External; x != nil && isWebURL(x.URI) {
+		if x := e.External; x != nil && weburl.Absolute(x.URI) {
 			v.External = &ExternalView{URL: x.URI, Title: x.Title, Description: x.Description}
 			if x.Thumb != nil && x.Thumb.Ref.Link != "" {
 				v.External.ThumbURL = mediaURL(x.Thumb.Ref.Link)
@@ -72,12 +73,6 @@ func addEmbed(v *Embed, e *pds.Embed, postURI string) {
 // mediaURL is the site's URL for one of the owner's blobs.
 func mediaURL(cid string) string {
 	return "/media/" + url.PathEscape(cid)
-}
-
-// isWebURL reports whether s is an absolute http or https URL.
-func isWebURL(s string) bool {
-	u, err := url.Parse(s)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // EmbedView describes e for a page: images and link-card thumbnails as

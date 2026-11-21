@@ -12,7 +12,7 @@ const postURI = "at://did:plc:ogl52fc2rdooori2ayf74can/app.bsky.feed.post/3mxc6h
 func blob(cid string) pds.Blob {
 	var b pds.Blob
 	b.Ref.Link = cid
-	b.MimeType = "image/jpeg"
+	b.MIMEType = "image/jpeg"
 	return b
 }
 
@@ -59,9 +59,11 @@ func TestEmbedViewExternal(t *testing.T) {
 }
 
 func TestEmbedViewExternalRejectsNonWebURL(t *testing.T) {
-	e := &pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: "javascript:alert(1)", Title: "x"}}
-	if v := EmbedView(e, postURI); v != nil {
-		t.Errorf("a javascript: link card = %+v, want nil", v)
+	for _, uri := range []string{"javascript:alert(1)", "http:/path", "https://:443/path"} {
+		e := &pds.Embed{Type: pds.EmbedExternal, External: &pds.External{URI: uri}}
+		if v := EmbedView(e, postURI); v != nil {
+			t.Errorf("link card for %q = %+v, want nil", uri, v)
+		}
 	}
 }
 

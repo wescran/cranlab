@@ -81,6 +81,7 @@ func TestFacets(t *testing.T) {
 			[]pds.Facet{facet(0, 5, pds.Feature{Type: "app.example.facet#sparkle"})},
 			"fancy",
 		},
+		{"hostless web URL stays text", "link", []pds.Facet{facet(0, 4, link("http:/path"))}, "link"},
 		{"past the end", "short", []pds.Facet{facet(0, 99, link("https://e.com"))}, "short"},
 		{"empty range", "short", []pds.Facet{facet(2, 2, link("https://e.com"))}, "short"},
 		{"backwards range", "short", []pds.Facet{facet(3, 1, link("https://e.com"))}, "short"},

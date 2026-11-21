@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var rkeyRe = regexp.MustCompile(`^at://[^/]+/[^/]+/([^/]+)$`)
@@ -29,16 +30,22 @@ type Client struct {
 }
 
 // New returns a client for the PDS at baseURL. A nil hc means
-// http.DefaultClient; requests are bounded by their context.
+// http.DefaultClient. Each request, including body reads, takes at most five
+// seconds (less if hc or the calling context has a tighter bound).
 func New(baseURL string, hc *http.Client) *Client {
 	base := strings.TrimRight(baseURL, "/")
 	if hc == nil {
 		hc = http.DefaultClient
 	}
 
+	bounded := *hc
+	const readTimeout = 5 * time.Second
+	if bounded.Timeout <= 0 || bounded.Timeout > readTimeout {
+		bounded.Timeout = readTimeout
+	}
 	return &Client{
 		baseURL: base,
-		hc:      hc,
+		hc:      &bounded,
 	}
 }
 
@@ -64,17 +71,34 @@ func (c *Client) get(ctx context.Context, method string, q url.Values) (*http.Re
 		Error   string `json:"error"`
 		Message string `json:"message"`
 	}
-	_ = json.UnmarshalRead(resp.Body, &xrpcErr)
+	lookup := method == "com.atproto.repo.getRecord" || method == "com.atproto.sync.getBlob"
+	if lookup && resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%s: %d: %w", method, resp.StatusCode, ErrNotFound)
+	}
+	if err := json.UnmarshalRead(resp.Body, &xrpcErr); err != nil {
+		return nil, fmt.Errorf("%s: %d: %w", method, resp.StatusCode, err)
+	}
 	err = fmt.Errorf("%s: %d %s: %s", method, resp.StatusCode, xrpcErr.Error, xrpcErr.Message)
-	// A PDS answers a missing blob with 400 InvalidRequest.
-	if xrpcErr.Error == "RecordNotFound" || (xrpcErr.Error == "InvalidRequest" && method == "com.atproto.sync.getBlob") {
-		err = fmt.Errorf("%w: %w", ErrNotFound, err)
+	if resp.StatusCode == http.StatusBadRequest {
+		switch method {
+		case "com.atproto.repo.getRecord":
+			if xrpcErr.Error == "RecordNotFound" {
+				return nil, fmt.Errorf("%w: %w", ErrNotFound, err)
+			}
+		case "com.atproto.sync.getBlob":
+			if xrpcErr.Error == "BlobNotFound" || (xrpcErr.Error == "InvalidRequest" && xrpcErr.Message == "Blob not found") {
+				return nil, fmt.Errorf("%w: %w", ErrNotFound, err)
+			}
+		}
 	}
 	return nil, err
 }
 
 // decodeRecord builds a Record, keeping the value's raw JSON.
 func decodeRecord[T any](uri, cid string, value jsontext.Value) (Record[T], error) {
+	if RKey(uri) == "" || cid == "" || value.Kind() != '{' {
+		return Record[T]{}, errors.New("malformed record envelope")
+	}
 	record := Record[T]{
 		URI: uri,
 		CID: cid,
@@ -104,7 +128,7 @@ func listPage[T any](ctx context.Context, c *Client, did, collection, cursor str
 	defer resp.Body.Close()
 
 	var out struct {
-		Cursor  string `json:"cursor"`
+		Cursor  jsontext.Value `json:"cursor"`
 		Records []struct {
 			URI   string         `json:"uri"`
 			CID   string         `json:"cid"`
@@ -115,8 +139,23 @@ func listPage[T any](ctx context.Context, c *Client, did, collection, cursor str
 		return nil, "", fmt.Errorf("list: %w", err)
 	}
 
+	if out.Records == nil {
+		return nil, "", errors.New("list: expected records array")
+	}
+	var next string
+	if out.Cursor != nil {
+		if out.Cursor.Kind() != '"' {
+			return nil, "", errors.New("list: expected string cursor")
+		}
+		if err := json.Unmarshal(out.Cursor, &next); err != nil {
+			return nil, "", fmt.Errorf("list cursor: %w", err)
+		}
+	}
 	records := make([]Record[T], 0, len(out.Records))
 	for _, rec := range out.Records {
+		if !strings.HasPrefix(rec.URI, "at://"+did+"/"+collection+"/") {
+			return nil, "", errors.New("list: record outside requested collection")
+		}
 		record, err := decodeRecord[T](rec.URI, rec.CID, rec.Value)
 		if err != nil {
 			return nil, "", fmt.Errorf("list: %w", err)
@@ -124,30 +163,40 @@ func listPage[T any](ctx context.Context, c *Client, did, collection, cursor str
 		records = append(records, record)
 	}
 
-	return records, out.Cursor, nil
+	return records, next, nil
+}
+
+// DocumentListing can be used to replace a snapshot only when Exhausted.
+type DocumentListing struct {
+	Records   []Record[Document]
+	Exhausted bool
 }
 
 // ListDocuments returns every site.standard.document record in did's
 // repository.
 //
-// A PDS may return a cursor with its last page, so the listing ends on an
-// empty page or a missing cursor.
-func (c *Client) ListDocuments(ctx context.Context, did string) ([]Record[Document], error) {
+// Follow every cursor, even when the next page may be empty.
+func (c *Client) ListDocuments(ctx context.Context, did string) (DocumentListing, error) {
 	allRecords := make([]Record[Document], 0)
+	seen := make(map[string]bool)
 	cursor := ""
 	for {
 		records, nextCursor, err := listPage[Document](ctx, c, did, DocumentCollection, cursor, 100)
 		if err != nil {
-			return nil, fmt.Errorf("ListDocuments: %w", err)
+			return DocumentListing{}, fmt.Errorf("ListDocuments: %w", err)
 		}
 		allRecords = append(allRecords, records...)
-		if len(records) == 0 || nextCursor == "" {
+		if nextCursor == "" {
 			break
 		}
+		if seen[nextCursor] {
+			return DocumentListing{}, errors.New("ListDocuments: repeated cursor")
+		}
+		seen[nextCursor] = true
 		cursor = nextCursor
 	}
 
-	return allRecords, nil
+	return DocumentListing{Records: allRecords, Exhausted: true}, nil
 }
 
 // ListPosts returns one page of did's app.bsky.feed.post records, newest

@@ -25,7 +25,7 @@ func TestEmbedImages(t *testing.T) {
 		t.Fatalf("embed = %+v", e)
 	}
 	img := e.Images[0]
-	if img.Alt != "a cat" || img.Image.Ref.Link != "bafkreiimg" || img.Image.MimeType != "image/jpeg" ||
+	if img.Alt != "a cat" || img.Image.Ref.Link != "bafkreiimg" || img.Image.MIMEType != "image/jpeg" ||
 		img.AspectRatio == nil || img.AspectRatio.Width != 4 || img.AspectRatio.Height != 3 {
 		t.Errorf("image = %+v", img)
 	}
