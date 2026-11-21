@@ -1,8 +1,10 @@
 package web
 
 import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,7 +15,6 @@ import (
 	"willnorris.com/go/microformats"
 
 	"github.com/wescran/cranlab/internal/config"
-	site "github.com/wescran/cranlab/web"
 )
 
 func testConfig() config.Config {
@@ -104,6 +105,9 @@ func TestHome(t *testing.T) {
 	if got := property(card, "url"); got != "https://cranlab.ca/" {
 		t.Errorf("h-card url = %q, want https://cranlab.ca/", got)
 	}
+	if got := property(card, "uid"); got != "https://cranlab.ca/" {
+		t.Errorf("representative h-card uid = %q, want canonical home URL", got)
+	}
 	if photo := property(card, "photo"); !strings.HasPrefix(photo, "https://cranlab.ca/static/images/profile-200.jpeg?v=") {
 		t.Errorf("h-card photo = %q, want the versioned profile image", photo)
 	}
@@ -141,8 +145,7 @@ func TestHead(t *testing.T) {
 			if !hasPrefix(data.Rels["stylesheet"], "https://cranlab.ca/static/css/main.css?v=") {
 				t.Errorf("stylesheet = %v, want the versioned main.css", data.Rels["stylesheet"])
 			}
-			// Unversioned, to match main.css's @font-face URL exactly.
-			if !contains(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2") {
+			if !hasPrefix(data.Rels["preload"], "https://cranlab.ca/static/fonts/Geist-Variable.woff2?v=") {
 				t.Errorf("preload = %v, want the Geist font at the URL main.css uses", data.Rels["preload"])
 			}
 		})
@@ -154,6 +157,9 @@ func TestAbout(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /about = %d, want 200", rec.Code)
 	}
+	if got := rec.Result().Header.Get("Cache-Control"); got != "public, max-age=60, stale-while-revalidate=60, stale-if-error=604800" {
+		t.Errorf("GET /about Cache-Control = %q", got)
+	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "<title>About Me | CranLab</title>") {
 		t.Error(`want <title>About Me | CranLab</title>`)
@@ -164,13 +170,17 @@ func TestAbout(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-	for _, path := range []string{"/nope", "/about/more", "/static"} {
-		rec := get(t, newTestHandler(t), path)
+	h := newTestHandler(t)
+	for _, path := range []string{"/nope", "/about/more", "/static", "/blog/old-post", "/blog/old-post/", "/absent%2F"} {
+		rec := get(t, h, path)
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", path, rec.Code)
 		}
 		if ct := rec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
 			t.Errorf("GET %s Content-Type = %q", path, ct)
+		}
+		if got := rec.Result().Header.Get("Cache-Control"); got != "public, max-age=60" {
+			t.Errorf("GET %s Cache-Control = %q", path, got)
 		}
 		if !strings.Contains(rec.Body.String(), "Page Not Found") {
 			t.Errorf("GET %s: want the 404 page", path)
@@ -180,8 +190,13 @@ func TestNotFound(t *testing.T) {
 
 func TestServiceUnavailablePage(t *testing.T) {
 	h := newTestHandler(t).(*server)
-	rec := httptest.NewRecorder()
-	h.renderError(rec, httptest.NewRequest(http.MethodGet, "/", nil), http.StatusServiceUnavailable)
+	h.mux.HandleFunc("GET /test-outage", func(w http.ResponseWriter, r *http.Request) {
+		h.unavailable(w, r, errors.New("source unavailable"))
+	})
+	rec := get(t, h, "/test-outage")
+	if got := rec.Result().Header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("503 Cache-Control = %q", got)
+	}
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", rec.Code)
 	}
@@ -192,21 +207,56 @@ func TestServiceUnavailablePage(t *testing.T) {
 
 func TestTrailingSlashRedirect(t *testing.T) {
 	tests := map[string]string{
-		"/about/":      "/about",
-		"/about/?x=1":  "/about?x=1",
-		"/articles/a/": "/articles/a",
+		"/about/":                  "/about",
+		"/about/?x=1":              "/about?x=1",
+		"/articles/a/":             "/articles/a",
+		"/tags/a%23b/?q=a%2Bb&x=1": "/tags/a%23b?q=a%2Bb&x=1",
+		"/tags/a%2F/":              "/tags/a%2F",
+		"//elsewhere.example/foo/": "/elsewhere.example/foo",
+		"///?":                     "/?",
 	}
+	h := newTestHandler(t)
 	for target, want := range tests {
-		rec := get(t, newTestHandler(t), target)
+		rec := get(t, h, target)
 		if rec.Code != http.StatusMovedPermanently {
 			t.Errorf("GET %s = %d, want 301", target, rec.Code)
+		}
+		if got := rec.Result().Header.Get("Cache-Control"); got != "public, max-age=86400" {
+			t.Errorf("GET %s Cache-Control = %q", target, got)
 		}
 		if loc := rec.Header().Get("Location"); loc != want {
 			t.Errorf("GET %s Location = %q, want %q", target, loc, want)
 		}
 	}
-	if rec := get(t, newTestHandler(t), "/"); rec.Code != http.StatusOK {
-		t.Errorf("GET / = %d, want 200 (no redirect)", rec.Code)
+}
+
+// Use a streaming handler behind the real HTTP policy so these checks don't
+// depend on the feed, identity and blob readers or their backing data.
+func TestRouteCachePolicy(t *testing.T) {
+	s := &server{mux: http.NewServeMux()}
+	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("down") {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = io.WriteString(w, "fixture")
+	})
+	const page = "public, max-age=60, stale-while-revalidate=60, stale-if-error=604800"
+	for _, tc := range []struct {
+		path   string
+		status int
+		cache  string
+	}{
+		{"/", 200, page},
+		{"/index.xml", 200, page},
+		{"/.well-known/site.standard.publication", 200, page},
+		{"/media/" + catCID, 200, "public, max-age=31536000, immutable"},
+		{"/media/" + catCID + "?down", 503, "no-store"},
+	} {
+		rec := get(t, s, tc.path)
+		if got := rec.Result().Header.Get("Cache-Control"); rec.Code != tc.status || got != tc.cache {
+			t.Errorf("GET %s = %d, Cache-Control %q; want %d, %q", tc.path, rec.Code, got, tc.status, tc.cache)
+		}
 	}
 }
 
@@ -241,9 +291,10 @@ func TestMethodNotAllowed(t *testing.T) {
 
 func TestStaticFromPage(t *testing.T) {
 	h := newTestHandler(t)
-	css := regexp.MustCompile(`/static/css/main\.css\?v=[0-9a-f]{12}`).FindString(get(t, h, "/").Body.String())
+	page := get(t, h, "/about").Body.String()
+	css := regexp.MustCompile(`/static/css/main\.css\?v=[0-9a-f]{12}`).FindString(page)
 	if css == "" {
-		t.Fatal("no versioned main.css link on the home page")
+		t.Fatal("no versioned main.css link on the about page")
 	}
 	rec := get(t, h, css)
 	if rec.Code != http.StatusOK {
@@ -255,10 +306,29 @@ func TestStaticFromPage(t *testing.T) {
 	if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
 		t.Errorf("Cache-Control = %q", cc)
 	}
-	want, _ := fs.ReadFile(site.FS, "static/css/main.css")
-	got, _ := io.ReadAll(rec.Body)
-	if string(got) != string(want) {
-		t.Error("served CSS differs from web/static/css/main.css")
+	for _, path := range []string{"/static/css/main.css", "/static/css/main.css?v=stale"} {
+		asset := get(t, h, path)
+		if got := asset.Result().Header.Get("Cache-Control"); asset.Code != http.StatusOK || strings.Contains(got, "immutable") {
+			t.Errorf("GET %s = %d, Cache-Control = %q; want a mutable asset", path, asset.Code, got)
+		}
+	}
+	hash := sha256.Sum256(rec.Body.Bytes())
+	if !strings.HasSuffix(css, fmt.Sprintf("?v=%x", hash[:6])) {
+		t.Error("stylesheet URL does not version the served bytes")
+	}
+	preload := regexp.MustCompile(`<link rel="preload" href="(/static/fonts/Geist-Variable\.woff2\?v=[0-9a-f]{12})"`).FindStringSubmatch(page)
+	if preload == nil || !strings.Contains(rec.Body.String(), preload[1]) {
+		t.Fatal("body font preload and stylesheet must reference the same versioned URL")
+	}
+	for _, name := range []string{"Geist-Variable", "Geist-Italic-Variable", "GeistMono-Variable", "GeistMono-Italic-Variable"} {
+		font := regexp.MustCompile(`/static/fonts/` + name + `\.woff2\?v=[0-9a-f]{12}`).FindString(rec.Body.String())
+		if font == "" {
+			t.Fatalf("no versioned font URL for %s", name)
+		}
+		r := get(t, h, font)
+		if r.Code != 200 || !strings.Contains(r.Header().Get("Cache-Control"), "immutable") {
+			t.Errorf("font %s: %d, Cache-Control %q", font, r.Code, r.Header().Get("Cache-Control"))
+		}
 	}
 }
 

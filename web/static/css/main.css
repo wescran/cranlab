@@ -11,7 +11,7 @@
 
 @font-face {
   font-family: 'Geist';
-  src: url('/static/fonts/Geist-Variable.woff2') format('woff2');
+  src: url('{{asset "fonts/Geist-Variable.woff2"}}') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -19,7 +19,7 @@
 
 @font-face {
   font-family: 'Geist';
-  src: url('/static/fonts/Geist-Italic-Variable.woff2') format('woff2');
+  src: url('{{asset "fonts/Geist-Italic-Variable.woff2"}}') format('woff2');
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -27,7 +27,7 @@
 
 @font-face {
   font-family: 'Geist Mono';
-  src: url('/static/fonts/GeistMono-Variable.woff2') format('woff2');
+  src: url('{{asset "fonts/GeistMono-Variable.woff2"}}') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -35,7 +35,7 @@
 
 @font-face {
   font-family: 'Geist Mono';
-  src: url('/static/fonts/GeistMono-Italic-Variable.woff2') format('woff2');
+  src: url('{{asset "fonts/GeistMono-Italic-Variable.woff2"}}') format('woff2');
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -43,42 +43,49 @@
 
 /* =========================================================================
    2. Tokens
-   Light is the default; dark follows the OS/browser preference only.
-   Palette: https://colorhunt.co/palette/007dccffb900d10056b2054c
-   Blue is nudged per theme to reach WCAG AA (4.5:1) against its background;
-   ratios are noted inline.
-     --accent    blue   : link text
-     --rule      red    : header rule, <hr>, maple leaf
-     --highlight yellow : <mark>, text selection, tag hover
+   Cobalt & Amber. System colors work without scripts or stored state.
    ========================================================================= */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --bg: #f7f9fc;
+  --surface: #fff;
+  --text: #101b2a;
+  --muted: #495970;
+  --border: #aebed1;
+  --accent: #005fcc;
+  --maple: #c02c49;
+  --highlight: #ffca45;
+  --on-highlight: #261d09;
+  --code-bg: #edf2f8;
+  --syntax-keyword: var(--accent);
+  --syntax-type: var(--maple);
+  --syntax-function: #7734a0;
+  --syntax-string: #166339;
+  --syntax-number: #824900;
+  --syntax-comment: var(--muted);
 
-  --bg: #ffffff;
-  --text: #1f2430;      /* 15.5:1 */
-  --muted: #5f6673;     /* 5.3:1 */
-  --border: #d5dae2;
-  --accent: #006db3;    /* 5.0:1 (palette #007dcc is 4.0:1) */
-  --rule: #ff0066;
-  --highlight: #ffb900;
-  --on-highlight: #1f2430; /* text on yellow, 9:1 in both themes */
-
-  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-
-  --rule-height: 0.2rem;
-  --radius-sm: 3px;
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --rule-height: 2px;
+  --radius-sm: 2px;
   --measure: 50rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b2130;
-    --text: #dfe4ec;    /* 12.6:1 */
-    --muted: #9aa3b2;   /* 6.3:1 */
-    --border: #2e3748;
-    --accent: #5db0ea;  /* 6.8:1 (palette #007dcc is 3.7:1) */
+    color-scheme: dark;
+    --bg: #0b101b;
+    --surface: #121c2c;
+    --text: #edf2f7;
+    --muted: #acbcd2;
+    --border: #44546e;
+    --accent: #5cc8ff;
+    --maple: #ff8491;
+    --code-bg: #101a29;
+    --syntax-function: #d4b1ff;
+    --syntax-string: #8edba6;
+    --syntax-number: #ffcd67;
   }
 }
 
@@ -102,7 +109,28 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  z-index: 1;
+  top: .5rem;
+  padding: .4em .8em;
+  background: var(--surface);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus { transform: none; }
+
+header > nav, body > footer, .byline, .tags, .note-meta, .older {
+  font-family: var(--font-mono);
 }
 
 /* Type scale */
@@ -111,7 +139,7 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.2;
 }
 
-h1 { font-size: 2rem; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -.035em; }
 h2 { font-size: 1.5rem; }
 h3 { font-size: 1.25rem; }
 
@@ -130,7 +158,7 @@ hr {
   height: var(--rule-height);
   width: 100%;
   border-radius: 999px;
-  background: var(--rule);
+  background: var(--border);
   margin-block: 2rem;
 }
 
@@ -168,18 +196,10 @@ header > nav {
   align-items: baseline;
   justify-content: space-between;
   flex-wrap: wrap;
-  padding-block: 0.25rem;
-  margin-bottom: 2rem;
-}
-
-/* Red rule under the nav, with rounded ends */
-header > nav::after {
-  content: "";
-  flex-basis: 100%;
-  height: var(--rule-height);
-  border-radius: 999px;
-  background: var(--rule);
-  margin-top: 0.25rem;
+  gap: .5rem 1rem;
+  padding-block: 1rem;
+  border-bottom: var(--rule-height) solid var(--text);
+  margin-bottom: clamp(1.5rem, 5vw, 3rem);
 }
 
 /* Site title: leaf + name */
@@ -194,18 +214,22 @@ header > nav > a {
 }
 
 header > nav > a > .icon {
-  color: var(--rule);
+  color: var(--maple);
 }
 
 header > nav > ul {
   display: flex;
-  gap: 1.5rem;
+  flex-wrap: wrap;
+  gap: .25rem clamp(.25rem, 1vw, 1rem);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 header > nav > ul a {
+  display: inline-block;
+  padding: .25em;
+  font-size: .9rem;
   font-weight: 600;
   text-decoration: none;
   color: var(--text);
@@ -213,6 +237,8 @@ header > nav > ul a {
 
 header > nav > ul a:hover,
 header > nav > ul a[aria-current="page"] {
+  background: var(--highlight);
+  color: var(--on-highlight);
   text-decoration: underline;
 }
 
@@ -226,6 +252,10 @@ section.h-card {
   display: flex;
   align-items: flex-start;
   gap: 1.5rem;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--text);
+  box-shadow: 4px 4px var(--border);
   margin-bottom: 3rem;
 }
 
@@ -264,30 +294,11 @@ section.h-card img.u-photo {
 }
 
 /* =========================================================================
-   6. Home: latest post
+   6. Home sections
    ========================================================================= */
 
-.latest > h2 {
-  margin-bottom: 1rem;
-}
-
-.latest article h3 {
-  margin: 0 0 0.25rem;
-}
-
-.latest article h3 a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.latest article h3 a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-}
-
-.latest .p-summary {
-  margin-top: 0.75rem;
-}
+.latest { margin-block: 2.5rem; }
+.latest > h2 { margin-bottom: 1rem; }
 
 /* =========================================================================
    7. Byline: author · date · reading time (post page and home)
@@ -346,30 +357,67 @@ article > header .tags {
 }
 
 /* =========================================================================
-   9. Post lists (blog section, tag pages)
+   9. Feed entries and reading column
    ========================================================================= */
 
-.h-feed article {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 1rem;
-  padding-block: 0.4rem;
+.article-summary, article.note {
+  margin-block: 1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
 }
 
-.h-feed article time {
-  font-size: 0.85rem;
-  color: var(--muted);
-  white-space: nowrap;
+.article-summary :is(h2, h3) { margin: .25rem 0; }
+
+.article-summary .p-summary {
+  margin: .35rem 0;
 }
 
-.h-feed article > a {
-  text-decoration: none;
+.article-summary .tags { margin: .5rem 0 0; }
+
+article > .e-content {
+  max-width: 68ch;
+  font-size: 1.08rem;
+  line-height: 1.75;
 }
 
-.h-feed article > a:hover {
-  text-decoration: underline;
+.e-content pre, .e-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
+
+.e-content pre {
+  box-sizing: border-box;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  background: var(--code-bg);
+  font-size: .9rem;
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+.e-content :not(pre) > code {
+  padding: .05em .25em;
+  background: var(--code-bg);
+}
+
+/* Chroma's short token classes are stable across lexers. Unstyled tokens
+   inherit the ordinary code foreground; no inline theme is required. */
+.chroma :is(.k, .kc, .kd, .kn, .kp, .kr, .ow, .nt, .cp, .cpf) {
+  color: var(--syntax-keyword);
+  font-weight: 600;
+}
+.chroma :is(.kt, .nc, .nn, .gd, .err) { color: var(--syntax-type); }
+.chroma :is(.nf, .fm, .nb, .bp, .nd) { color: var(--syntax-function); }
+.chroma :is(.s, .sa, .sb, .sc, .dl, .sd, .s1, .s2, .se, .sh, .si, .sx, .sr, .ss, .gi) { color: var(--syntax-string); }
+.chroma :is(.m, .mb, .mf, .mh, .mi, .il, .mo) { color: var(--syntax-number); }
+.chroma :is(.c, .c1, .cm, .cs, .ch) { color: var(--syntax-comment); font-style: italic; }
+.chroma .hl { background: color-mix(in srgb, var(--highlight) 20%, var(--code-bg)); }
+.chroma .line { display: flex; }
+.chroma .lntable { display: table; border-collapse: collapse; }
 
 /* =========================================================================
    10. Tags (chips)
@@ -563,7 +611,7 @@ body > footer address {
    Collapsible groups: facepiles for likes/reposts, lists for replies/mentions.
    ========================================================================= */
 
-/* The <hr> before the section is the separator (red rule, base styles);
+/* The <hr> before the section is the separator;
    give it more room than an in-article rule. */
 article > hr {
   margin-block: 4rem 2rem;
@@ -724,27 +772,10 @@ article > hr {
 }
 
 /* =========================================================================
-   14. Article lists: summary line under each entry
+   14. Notes and post embeds
    ========================================================================= */
 
-.h-feed article > .p-summary {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-/* =========================================================================
-   15. Notes and post embeds
-   ========================================================================= */
-
-/* Notes are stacked blocks, not the one-line rows of article lists */
-.h-feed article.note,
-article.note {
-  display: block;
-  padding-block: 1rem;
-  border-bottom: 1px solid var(--border);
-}
+article.note { border-inline-start-color: var(--highlight); }
 
 article.note .e-content {
   overflow-wrap: anywhere;
@@ -753,7 +784,7 @@ article.note .e-content {
 .note-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: .25rem 1rem;
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
 }
@@ -832,7 +863,7 @@ article.note .e-content {
 }
 
 /* =========================================================================
-   16. Callouts (Obsidian "> [!type] Title" blocks in articles)
+   15. Callouts (Obsidian "> [!type] Title" blocks in articles)
    ========================================================================= */
 
 .callout {
@@ -858,7 +889,7 @@ article.note .e-content {
 .callout-success,
 .callout-check,
 .callout-done {
-  --callout: #1a8754;
+  --callout: var(--syntax-string);
 }
 
 .callout-warning,
@@ -867,7 +898,7 @@ article.note .e-content {
 .callout-question,
 .callout-help,
 .callout-faq {
-  --callout: #b26a00;
+  --callout: var(--syntax-number);
 }
 
 .callout-danger,
@@ -875,25 +906,7 @@ article.note .e-content {
 .callout-bug,
 .callout-failure,
 .callout-fail {
-  --callout: var(--rule);
-}
-
-@media (prefers-color-scheme: dark) {
-  .callout-tip,
-  .callout-success,
-  .callout-check,
-  .callout-done {
-    --callout: #4cc38a;
-  }
-
-  .callout-warning,
-  .callout-caution,
-  .callout-attention,
-  .callout-question,
-  .callout-help,
-  .callout-faq {
-    --callout: #ffb900;
-  }
+  --callout: var(--maple);
 }
 
 /* Images in article bodies never overflow the column */

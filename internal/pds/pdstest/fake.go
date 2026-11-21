@@ -1,5 +1,5 @@
 // Package pdstest provides an in-memory fake PDS for tests. It serves the
-// read endpoints the site uses, with the same responses and error shapes as
+// XRPC endpoints the site uses, with the same responses and error shapes as
 // a real PDS.
 package pdstest
 
@@ -16,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 // Server is a fake PDS hosting one repository.
@@ -23,13 +25,35 @@ type Server struct {
 	*httptest.Server
 	DID string
 
-	mu       sync.Mutex
-	records  map[string]map[string]record // collection → rkey → record
-	blobs    map[string]blob              // cid → blob
-	failWith int
-	delay    time.Duration
-	noFinal  bool
-	requests []url.URL
+	mu            sync.Mutex
+	revision      uint64
+	records       map[string]map[string]record // collection → rkey → record
+	blobs         map[string]blob              // cid → blob
+	failWith      int
+	delay         time.Duration
+	noFinal       bool
+	replies       map[requestKey]reply
+	requests      []url.URL
+	subscriptions chan *websocket.Conn
+}
+
+type requestKey struct{ method, cursor string }
+type reply struct {
+	status int
+	body   string
+}
+
+// Respond overrides a single XRPC method and cursor with a literal HTTP response.
+// Status 0 removes the override.
+func (s *Server) Respond(method, cursor string, status int, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := requestKey{"/xrpc/" + method, cursor}
+	if status == 0 {
+		delete(s.replies, key)
+		return
+	}
+	s.replies[key] = reply{status, body}
 }
 
 type record struct {
@@ -45,14 +69,40 @@ type blob struct {
 // New starts a fake PDS for did, stopped when the test ends.
 func New(t testing.TB, did string) *Server {
 	s := &Server{
-		DID:     did,
-		records: map[string]map[string]record{},
-		blobs:   map[string]blob{},
+		DID:           did,
+		subscriptions: make(chan *websocket.Conn),
+		replies:       map[requestKey]reply{},
+		records:       map[string]map[string]record{},
+		blobs:         map[string]blob{},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /xrpc/com.atproto.server.createSession", s.createSession)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.putRecord", s.putRecord)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.createRecord", s.createRecord)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.uploadBlob", s.uploadBlob)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.listRecords", s.listRecords)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.getRecord", s.getRecord)
+	mux.HandleFunc("GET /xrpc/com.atproto.sync.getLatestCommit", s.latestCommit)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.getBlob", s.getBlob)
+	mux.HandleFunc("GET /xrpc/com.atproto.sync.subscribeRepos", func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		ctx := c.CloseRead(r.Context())
+		select {
+		case s.subscriptions <- c:
+		case <-ctx.Done():
+			return
+		case <-t.Context().Done():
+			return
+		}
+		select {
+		case <-ctx.Done():
+		case <-t.Context().Done():
+		}
+	})
 	s.Server = httptest.NewServer(s.wrap(mux))
 	t.Cleanup(s.Close)
 	return s
@@ -73,15 +123,31 @@ func (s *Server) Put(collection, rkey string, value any) string {
 			panic(err)
 		}
 	}
-	sum := sha256.Sum256(append([]byte(collection+"/"+rkey+"\n"), raw...))
-	cid := "bafyrei" + hex.EncodeToString(sum[:])[:40]
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.putLocked(collection, rkey, raw)
+}
+
+func (s *Server) putLocked(collection, rkey string, raw jsontext.Value) string {
+	sum := sha256.Sum256(append([]byte(collection+"/"+rkey+"\n"), raw...))
+	cid := "bafyrei" + hex.EncodeToString(sum[:])[:40]
 	if s.records[collection] == nil {
 		s.records[collection] = map[string]record{}
 	}
+	s.revision++
 	s.records[collection][rkey] = record{cid: cid, value: raw}
 	return cid
+}
+
+// Subscriptions delivers each accepted connection for tests to ring or interrupt.
+func (s *Server) Subscriptions() <-chan *websocket.Conn { return s.subscriptions }
+
+// Delete removes a record without sending a wake-up.
+func (s *Server) Delete(collection, rkey string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.records[collection], rkey)
+	s.revision++
 }
 
 // PutBlob stores a blob under cid.
@@ -127,6 +193,7 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 		s.mu.Lock()
 		s.requests = append(s.requests, *r.URL)
 		failWith, delay := s.failWith, s.delay
+		override, ok := s.replies[requestKey{r.URL.Path, r.URL.Query().Get("cursor")}]
 		s.mu.Unlock()
 		if delay > 0 {
 			select {
@@ -137,6 +204,12 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 		}
 		if failWith != 0 {
 			xrpcError(w, failWith, "InternalServerError", "Internal Server Error")
+			return
+		}
+		if ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(override.status)
+			_, _ = w.Write([]byte(override.body))
 			return
 		}
 		next.ServeHTTP(w, r)

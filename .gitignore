@@ -1,6 +1,8 @@
 # Local builds
 /site
 /dist/
+/cache.db
+/cache.db-*
 
 # macOS
 .DS_Store

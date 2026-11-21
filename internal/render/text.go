@@ -33,6 +33,18 @@ func Excerpt(text string, n int) string {
 	return strings.TrimRight(short, " ,;:") + "…"
 }
 
+// FirstCharacters returns the first n Unicode characters without rewriting
+// whitespace or appending an ellipsis (e.g. for an RSS text fallback).
+func FirstCharacters(text string, n int) string {
+	for i := range text {
+		if n <= 0 {
+			return text[:i]
+		}
+		n--
+	}
+	return text
+}
+
 // PostURL turns a post's AT-URI into its bsky.app URL
 // (at://<did>/app.bsky.feed.post/<rkey> →
 // https://bsky.app/profile/<did>/post/<rkey>), or "" if uri isn't a post.

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/wescran/cranlab/internal/pds/pdstest"
 )
 
 func (f *fixture) get(t *testing.T, target string) (int, string) {
@@ -49,6 +51,21 @@ func TestArticlesPage(t *testing.T) {
 	}
 	// No description: an excerpt of the text.
 	mustContain(t, body, "Racks and cables.")
+}
+
+func TestArticleSummaryReadingLayout(t *testing.T) {
+	_, page := newFixture(t).get(t, "/articles")
+	for _, entry := range regexp.MustCompile(`(?s)<article\b.*?</article>`).FindAllString(page, -1) {
+		if !strings.Contains(entry, `href="/articles/welcome"`) {
+			continue
+		}
+		mustContain(t, entry, "September 28, 2026", "1 min read", "Hello there.")
+		if !regexp.MustCompile(`<h2[^>]*>\s*<a[^>]*>Welcome</a>\s*</h2>`).MatchString(entry) {
+			t.Error("summary title should be a linked heading")
+		}
+		return
+	}
+	t.Fatal("Welcome summary missing")
 }
 
 func TestArticlePage(t *testing.T) {
@@ -169,8 +186,8 @@ func TestNoteNotFound(t *testing.T) {
 
 func TestHomeShowsLatestArticleAndNotes(t *testing.T) {
 	_, body := newFixture(t).get(t, "/")
-	mustContain(t, body, "Latest Article", `href="/articles/homelab"`, "My Homelab", "Recent Notes", `href="/notes"`)
-	mustNotContain(t, body, `href="/articles/welcome"`)
+	mustContain(t, body, "Recent Articles", `href="/articles/homelab"`, "My Homelab", "Recent Notes", `href="/notes"`)
+	mustContain(t, body, `href="/articles/welcome"`)
 	if keys := noteKeys(body); len(keys) != 5 || keys[0] != "3n0025" {
 		t.Errorf("home notes = %v, want the 5 newest", keys)
 	}
@@ -224,33 +241,43 @@ func TestMedia(t *testing.T) {
 
 func TestMediaRejectsBadCIDs(t *testing.T) {
 	f := newFixture(t)
-	for _, path := range []string{"/media/not-a-cid", "/media/BAFKREIUPPER", "/media/bafk..%2Fxrpc", "/media/b1"} {
+	before := len(f.pds.Requests())
+	for _, path := range []string{"/media/not-a-cid", "/media/BAFKREIUPPER", "/media/bafk..%2Fxrpc", "/media/b1", "/media/bafkreitruncated"} {
 		if rec := get(t, f.handler, path); rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", path, rec.Code)
 		}
 	}
-	for _, u := range f.pds.Requests() {
-		if u.Path == "/xrpc/com.atproto.sync.getBlob" {
-			t.Errorf("an invalid CID reached the PDS: %s", u.String())
-		}
+	if got := f.pds.Requests()[before:]; len(got) != 0 {
+		t.Errorf("invalid CIDs reached the PDS: %v", got)
 	}
-	if rec := get(t, f.handler, "/media/bafkreimissingblob"); rec.Code != http.StatusNotFound {
-		t.Errorf("a missing blob = %d, want 404", rec.Code)
+}
+
+func TestMediaMissing(t *testing.T) {
+	f := newFixture(t)
+	const missing = "bafkreih7uy2yhx5gobvypuuexbvq22j2cypeqqfk2lc46225e7b3syq7pu"
+	rec := get(t, f.handler, "/media/"+missing)
+	if cc := rec.Result().Header.Get("Cache-Control"); rec.Code != http.StatusNotFound || cc != "public, max-age=60" {
+		t.Errorf("missing blob = %d, Cache-Control %q; want 404 cached for 60s", rec.Code, cc)
 	}
 }
 
 func TestPDSDown(t *testing.T) {
-	f := newFixture(t)
-	f.pds.FailWith(http.StatusInternalServerError)
-	for _, path := range []string{"/", "/articles", "/articles/welcome", "/notes", "/notes/3n0025", "/tags", "/tags/writing"} {
-		code, body := f.get(t, path)
-		if code != http.StatusServiceUnavailable || !strings.Contains(strings.ToLower(body), "temporarily unavailable") {
-			t.Errorf("GET %s with the PDS down = %d, want the 503 page", path, code)
+	fake := pdstest.New(t, testDID)
+	fake.FailWith(http.StatusInternalServerError)
+	f := startFixture(t, fake, false)
+	for _, path := range []string{"/articles", "/articles/welcome", "/tags", "/tags/writing", "/", "/notes", "/notes/3n0025"} {
+		t.Run("GET"+path, func(t *testing.T) {
+			code, body := f.get(t, path)
+			if code != http.StatusServiceUnavailable || !strings.Contains(strings.ToLower(body), "temporarily unavailable") {
+				t.Errorf("GET %s with the PDS down = %d, want the 503 page", path, code)
+			}
+		})
+	}
+	t.Run("GET/media", func(t *testing.T) {
+		if rec := get(t, f.handler, "/media/"+catCID); rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("GET /media with the PDS down = %d, want 503 (not 404)", rec.Code)
 		}
-	}
-	if rec := get(t, f.handler, "/media/"+catCID); rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("GET /media with the PDS down = %d, want 503 (not 404)", rec.Code)
-	}
+	})
 	// Pages that don't use the PDS keep working.
 	if code, _ := f.get(t, "/about"); code != http.StatusOK {
 		t.Errorf("GET /about = %d", code)

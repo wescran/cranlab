@@ -23,6 +23,7 @@ type Record[T any] struct {
 
 // Document is a site.standard.document record (an article).
 type Document struct {
+	Type        string         `json:"$type,omitempty"`
 	Site        string         `json:"site"`
 	Path        string         `json:"path"`
 	Title       string         `json:"title"`
@@ -36,8 +37,23 @@ type Document struct {
 	BskyPostRef *StrongRef     `json:"bskyPostRef"`
 }
 
+// Markdown returns authored Markdown only for at.markpub.markdown content.
+func (d Document) Markdown() *string {
+	var body struct {
+		Type string `json:"$type"`
+		Text struct {
+			Markdown *string `json:"markdown"`
+		} `json:"text"`
+	}
+	if json.Unmarshal(d.Content, &body) != nil || body.Type != "at.markpub.markdown" {
+		return nil
+	}
+	return body.Text.Markdown
+}
+
 // Post is an app.bsky.feed.post record.
 type Post struct {
+	Type      string   `json:"$type,omitempty"`
 	Text      string   `json:"text"`
 	CreatedAt string   `json:"createdAt"`
 	Facets    []Facet  `json:"facets"`
@@ -64,8 +80,8 @@ type ByteSlice struct {
 type Feature struct {
 	Type string `json:"$type"` // app.bsky.richtext.facet#link, #mention or #tag
 	URI  string `json:"uri"`
-	DID  string `json:"did"`
-	Tag  string `json:"tag"`
+	DID  string `json:"did,omitempty"`
+	Tag  string `json:"tag,omitempty"`
 }
 
 // Embed types.
@@ -123,10 +139,11 @@ type Video struct {
 
 // Blob is a reference to an uploaded file (image).
 type Blob struct {
-	Ref struct {
+	Type string `json:"$type,omitempty"`
+	Ref  struct {
 		Link string `json:"$link"` // the blob's CID
 	} `json:"ref"`
-	MimeType string `json:"mimeType"`
+	MIMEType string `json:"mimeType"`
 	Size     int    `json:"size"`
 }
 

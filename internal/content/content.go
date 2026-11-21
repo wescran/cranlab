@@ -3,7 +3,11 @@
 package content
 
 import (
-	"context"
+	"cmp"
+	"maps"
+	"net/url"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
@@ -14,59 +18,129 @@ const ArticlePrefix = "/articles/"
 
 // Article is a document published on the site.
 type Article struct {
-	Record pds.Record[pds.Document]
+	URI, Title, Description, TextContent string
+	AnnouncementURI, CoverCID            string
+	Tags                                 []string
+	Markdown                             *string
+	HasPublished                         bool
 	// Slug is the last part of the article's path ("/articles/<slug>").
 	Slug string
 	// Published is PublishedAt parsed; zero if it isn't a valid timestamp.
 	Published time.Time
 }
 
-// Articles returns the documents that are articles of publication: those
+// PermalinkPath is the public path of this Article, with its slug escaped as one segment.
+func (a Article) PermalinkPath() string { return ArticlePrefix + url.PathEscape(a.Slug) }
+
+// Articles projects the owner's documents from a validated PDS listing. It selects those
 // whose Site is publication and whose Path is "/articles/<slug>" with a
 // non-empty slug and no further "/". They're sorted newest first by
 // Published, then by Slug.
 func Articles(docs []pds.Record[pds.Document], publication string) []Article {
-	panic("not implemented")
+	var articles []Article
+	for _, r := range docs {
+		d := r.Value
+		slug, ok := strings.CutPrefix(d.Path, ArticlePrefix)
+		if d.Site != publication || !ok || slug == "" || strings.Contains(slug, "/") {
+			continue
+		}
+		date, err := time.Parse(time.RFC3339, d.PublishedAt)
+		a := Article{
+			Slug: slug, Published: date, HasPublished: err == nil,
+			URI: r.URI, Title: d.Title, Description: d.Description,
+			TextContent: d.TextContent, Markdown: d.Markdown(),
+		}
+		if d.BskyPostRef != nil {
+			a.AnnouncementURI = d.BskyPostRef.URI
+		}
+		if d.CoverImage != nil {
+			a.CoverCID = d.CoverImage.Ref.Link
+		}
+		seen := map[string]bool{}
+		for _, raw := range d.Tags {
+			tag := strings.ToLower(strings.TrimSpace(raw))
+			if tag != "" && !seen[tag] {
+				seen[tag] = true
+				a.Tags = append(a.Tags, tag)
+			}
+		}
+		slices.Sort(a.Tags)
+		articles = append(articles, a)
+	}
+	slices.SortFunc(articles, func(a, b Article) int {
+		if a.HasPublished != b.HasPublished {
+			if a.HasPublished {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Or(b.Published.Compare(a.Published), strings.Compare(a.Slug, b.Slug))
+	})
+	return articles
 }
 
 // FindArticle returns the article with this slug.
 func FindArticle(articles []Article, slug string) (Article, bool) {
-	panic("not implemented")
+	for _, a := range articles {
+		if a.Slug == slug {
+			return a, true
+		}
+	}
+	return Article{}, false
 }
 
-// Announcements returns the record keys of docs. A post with the same record
-// key as a document is that document's announcement on Bluesky.
-func Announcements(docs []pds.Record[pds.Document]) map[string]bool {
-	panic("not implemented")
+// Announcements indexes both the deterministic key and the exact referenced URI
+// of every published Article. This display filter is not proof for a write.
+func Announcements(articles []Article) map[string]bool {
+	refs := make(map[string]bool)
+	for _, a := range articles {
+		owner, _, _ := strings.Cut(strings.TrimPrefix(a.URI, "at://"), "/")
+		refs["at://"+owner+"/"+pds.PostCollection+"/"+pds.RKey(a.URI)] = true
+		if a.AnnouncementURI != "" {
+			refs[a.AnnouncementURI] = true
+		}
+	}
+	return refs
 }
 
-// IsNote reports whether a post is shown as a note: it isn't a reply and
-// isn't an announcement.
-func IsNote(p pds.Record[pds.Post], announcements map[string]bool) bool {
-	panic("not implemented")
+func IsNote(p pds.Record[pds.Post], announcements map[string]bool, siteURL string) bool {
+	if (len(p.Value.Reply) > 0 && p.Value.Reply.Kind() != 'n') || announcements[p.URI] {
+		return false
+	}
+	e := p.Value.Embed
+	if e != nil && e.Type == pds.EmbedRecordWithMedia {
+		e = e.Media
+	}
+	if e == nil || e.Type != pds.EmbedExternal || e.External == nil {
+		return true
+	}
+	return !articleLink(e.External.URI, siteURL)
 }
 
-// PostLister lists posts one page at a time (satisfied by *pds.Client).
-type PostLister interface {
-	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
+func articleLink(raw, siteURL string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	site, err := url.Parse(siteURL)
+	if err != nil || site.Hostname() == "" || u.Scheme != site.Scheme || !strings.EqualFold(u.Hostname(), site.Hostname()) || port(u) != port(site) {
+		return false
+	}
+	// Match route segments before unescaping: an encoded slash is not a route separator.
+	dir, segment, ok := strings.Cut(strings.TrimPrefix(strings.TrimSuffix(u.EscapedPath(), "/"), "/"), "/")
+	dir, _ = url.PathUnescape(dir)
+	slug, _ := url.PathUnescape(segment)
+	return ok && dir == "articles" && slug != "" && slug != "." && slug != ".." && !strings.Contains(slug, "/")
 }
 
-// maxNotePages bounds how many pages Notes reads to fill one page of notes,
-// in case most posts are replies.
-const maxNotePages = 10
-
-// Notes returns up to n notes, newest first, starting after cursor ("" for
-// the newest), and the cursor to continue from.
-//
-// It reads pages of posts (limit 100) and keeps the notes, until it has n,
-// a page is empty, the PDS returns no cursor, or it has read maxNotePages
-// pages. The returned cursor is "" when the posts ran out; otherwise it's
-// where to continue: the record key of the last note returned (when n were
-// found), or the last page's cursor (when it gave up).
-// A listRecords cursor is a record key, so the next call continues right
-// after that note even if it stopped partway through a page.
-func Notes(ctx context.Context, l PostLister, did string, announcements map[string]bool, cursor string, n int) ([]pds.Record[pds.Post], string, error) {
-	panic("not implemented")
+func port(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if u.Scheme == "https" {
+		return "443"
+	}
+	return "80"
 }
 
 // TagCount is a tag and how many articles have it.
@@ -77,10 +151,26 @@ type TagCount struct {
 
 // Tags counts the articles' tags, sorted by tag (case-insensitively).
 func Tags(articles []Article) []TagCount {
-	panic("not implemented")
+	counts := map[string]int{}
+	for _, a := range articles {
+		for _, tag := range a.Tags {
+			counts[tag]++
+		}
+	}
+	var out []TagCount
+	for _, tag := range slices.Sorted(maps.Keys(counts)) {
+		out = append(out, TagCount{tag, counts[tag]})
+	}
+	return out
 }
 
 // WithTag returns the articles that have tag, keeping their order.
 func WithTag(articles []Article, tag string) []Article {
-	panic("not implemented")
+	var out []Article
+	for _, a := range articles {
+		if slices.Contains(a.Tags, tag) {
+			out = append(out, a)
+		}
+	}
+	return out
 }

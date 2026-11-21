@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -8,21 +9,32 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"text/template"
 )
 
 // static serves files under /static/ with URLs that change whenever a file's
 // content does, so they can be cached forever.
 type static struct {
-	fsys   fs.FS
-	hashes map[string]string
+	fsys       fs.FS
+	hashes     map[string]string
+	stylesheet []byte
 }
 
-// newStatic hashes every file in fsys.
+const mainCSS = "css/main.css"
+
+func assetVersion(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
+}
+
+// Resolve stylesheet references once, then version the final bytes so a
+// font change also invalidates the stylesheet.
 func newStatic(fsys fs.FS) (*static, error) {
 	s := &static{
 		fsys:   fsys,
 		hashes: make(map[string]string),
 	}
+	var cssTemplate *template.Template
 	if err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -34,12 +46,22 @@ func newStatic(fsys fs.FS) (*static, error) {
 		if err != nil {
 			return err
 		}
-		hash := sha256.Sum256(fileBytes)
-		encoded := hex.EncodeToString(hash[:])
-		s.hashes[path] = encoded
+		if path == mainCSS {
+			cssTemplate, err = template.New(mainCSS).Funcs(template.FuncMap{"asset": s.url}).Parse(string(fileBytes))
+			return err
+		}
+		s.hashes[path] = assetVersion(fileBytes)
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if cssTemplate != nil {
+		var css bytes.Buffer
+		if err := cssTemplate.Execute(&css, nil); err != nil {
+			return nil, err
+		}
+		s.stylesheet = css.Bytes()
+		s.hashes[mainCSS] = assetVersion(s.stylesheet)
 	}
 	return s, nil
 }
@@ -48,20 +70,23 @@ func newStatic(fsys fs.FS) (*static, error) {
 // name is an error, so a typo in a template fails rendering.
 func (s *static) url(name string) (string, error) {
 	if hash, ok := s.hashes[name]; ok {
-		return fmt.Sprintf("/static/%s?v=%s", name, hash[:12]), nil
+		return fmt.Sprintf("/static/%s?v=%s", name, hash), nil
 	}
 	return "", fmt.Errorf("static: unknown file %q", name)
 }
 
-// ServeHTTP serves the file named by the {path...} wildcard with a one-year
-// immutable cache. The ?v= query is ignored.
+// ServeHTTP caches an asset as immutable only under its current content version.
 func (s *static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rPath := r.PathValue("path")
-	if _, ok := s.hashes[rPath]; ok {
-		fileBytes, err := fs.ReadFile(s.fsys, rPath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
+	if hash, ok := s.hashes[rPath]; ok {
+		fileBytes := s.stylesheet
+		if rPath != mainCSS {
+			var err error
+			fileBytes, err = fs.ReadFile(s.fsys, rPath)
+			if err != nil {
+				http.Error(w, "Asset unavailable", http.StatusServiceUnavailable)
+				return
+			}
 		}
 		var contentType string
 		extension := path.Ext(rPath)
@@ -77,7 +102,9 @@ func (s *static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			contentType = mime.TypeByExtension(path.Ext(rPath))
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		if r.URL.Query().Get("v") == hash {
+			w.Header().Set("Cache-Control", immutableCache)
+		}
 		_, _ = w.Write(fileBytes)
 		return
 	}

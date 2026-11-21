@@ -28,7 +28,8 @@ func markpub(t *testing.T, markdown string) pds.Document {
 
 func body(t *testing.T, markdown string) string {
 	t.Helper()
-	html, err := ArticleBody(markpub(t, markdown), opts)
+	doc := markpub(t, markdown)
+	html, err := ArticleBody(doc.Markdown(), doc.TextContent, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +54,14 @@ func TestArticleBodyGFM(t *testing.T) {
 		"<table>", "<td>1</td>",
 		`<input checked="" disabled="" type="checkbox"`,
 	)
+}
+
+func TestArticleBodyHighlightsFencedCode(t *testing.T) {
+	got := body(t, "```go\nfunc main() {}\n```\n")
+	assertContains(t, got, `class="chroma"`, `<span class="kd">func</span>`)
+	if strings.Contains(got, `style="`) {
+		t.Error("code colors should follow theme classes, not inline styles")
+	}
 }
 
 func TestArticleBodyKeepsRawHTML(t *testing.T) {
@@ -137,14 +146,14 @@ func TestArticleBodyFallsBackToTextContent(t *testing.T) {
 		Content:     jsontext.Value(`{"$type":"com.example.richtext","blocks":[]}`),
 		TextContent: "First <para>.\n\nSecond para.",
 	}
-	got, err := ArticleBody(doc, opts)
+	got, err := ArticleBody(doc.Markdown(), doc.TextContent, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got) != "<p>First &lt;para&gt;.</p>\n<p>Second para.</p>\n" {
 		t.Errorf("fallback = %q", got)
 	}
-	noContent, _ := ArticleBody(pds.Document{TextContent: "Only text."}, opts)
+	noContent, _ := ArticleBody(nil, "Only text.", opts)
 	if string(noContent) != "<p>Only text.</p>\n" {
 		t.Errorf("no content = %q", noContent)
 	}

@@ -3,20 +3,20 @@ package render
 
 import (
 	"bytes"
-	"encoding/json/v2"
+	"fmt"
 	"html/template"
 	"net/url"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
-
-	"github.com/wescran/cranlab/internal/pds"
 )
 
 // Options configure ArticleBody.
@@ -32,7 +32,7 @@ type Options struct {
 // block.
 func textFallback(text string) string {
 	split := strings.Split(text, "\n\n")
-	result := make([]string, len(split))
+	result := make([]string, 0, len(split))
 	for _, block := range split {
 		newBlock := strings.TrimSpace(block)
 		if newBlock == "" {
@@ -48,35 +48,22 @@ func textFallback(text string) string {
 // content is rendered as GFM with raw HTML kept (only the owner's records are
 // rendered), callouts, and the owner's blob URLs pointed at /media. Any other
 // content falls back to the escaped textContent.
-func ArticleBody(doc pds.Document, o Options) (template.HTML, error) {
-	var content struct {
-		Type string `json:"$type"`
-		Text struct {
-			Markdown string `json:"markdown"`
-		} `json:"text"`
-	}
-
-	if len(doc.Content) == 0 {
-		return template.HTML(textFallback(doc.TextContent)), nil
-	}
-
-	if err := json.Unmarshal(doc.Content, &content); err != nil {
-		return template.HTML(textFallback(doc.TextContent)), nil
-	}
-
-	if content.Type != "at.markpub.markdown" {
-		return template.HTML(textFallback(doc.TextContent)), nil
+func ArticleBody(markdown *string, textContent string, o Options) (template.HTML, error) {
+	if markdown == nil {
+		return template.HTML(textFallback(textContent)), nil
 	}
 
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM, callouts{}),
+		goldmark.WithExtensions(extension.GFM, callouts{}, highlighting.NewHighlighting(
+			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+		)),
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(blobRewriter{o}, 100))),
 		goldmark.WithRendererOptions(html.WithUnsafe()),
 	)
 
 	var buf bytes.Buffer
-	if err := md.Convert([]byte(content.Text.Markdown), &buf); err != nil {
-		return template.HTML(""), err
+	if err := md.Convert([]byte(*markdown), &buf); err != nil {
+		return "", fmt.Errorf("render article Markdown: %w", err)
 	}
 	return template.HTML(buf.String()), nil
 }

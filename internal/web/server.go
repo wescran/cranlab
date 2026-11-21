@@ -3,9 +3,8 @@ package web
 
 import (
 	"bytes"
-	"context"
+	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
-	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/content"
 	site "github.com/wescran/cranlab/web"
 )
 
@@ -22,18 +21,13 @@ const SiteTitle = "CranLab"
 
 // Deps are the server's collaborators.
 type Deps struct {
-	// PDS is where content is read from.
-	PDS PDS
+	Store content.ContentStore
+	// Interactions is optional; detail pages remain readable without it.
+	Interactions InteractionReader
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
-}
-
-// PDS is what the site reads from the PDS (satisfied by *pds.Client).
-type PDS interface {
-	ListDocuments(ctx context.Context, did string) ([]pds.Record[pds.Document], error)
-	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
-	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
-	GetBlob(ctx context.Context, did, cid string) (io.ReadCloser, string, error)
+	// Blobs streams owner media.
+	Blobs BlobReader
 }
 
 // Page is the data every page template receives.
@@ -41,16 +35,22 @@ type Page struct {
 	// Title is the page's title; empty on the home page.
 	Title string
 	// Description fills <meta name="description">.
-	Description string
+	Description  string
+	CanonicalURL string
+	CoverCID     string
+	// DocumentID is an Article record identifier without the literal at:// scheme.
+	DocumentID string
 	// Path is the request path, used to mark the current navigation item.
 	Path string
 	// Year is the current year, for the footer.
 	Year int
-	// Config holds the site settings.
-	Config config.Config
+	// Config contains only publicly visible template settings.
+	Config PublicConfig
 	// Data is the page's own content: one of the view types in views.go.
 	Data any
 }
+
+type PublicConfig struct{ SiteURL, WebmentionDomain string }
 
 type server struct {
 	cfg    config.Config
@@ -66,15 +66,15 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux := http.NewServeMux()
 	staticFS, err := fs.Sub(site.FS, "static")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open embedded static directory: %w", err)
 	}
 	staticHandler, err := newStatic(staticFS)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize static assets: %w", err)
 	}
 	pages, err := parsePages(site.FS, templateFuncs(staticHandler))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse page templates: %w", err)
 	}
 	if deps.Now == nil {
 		deps.Now = time.Now
@@ -89,7 +89,6 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
-	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "about", http.StatusOK, Page{
 			Description: "About Wesley Cranston",
@@ -98,6 +97,10 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /.well-known/site.standard.publication", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(cfg.PublicationURI))
 	})
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -109,12 +112,20 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
 	mux.Handle("GET /static/{path...}", staticHandler)
-	mux.HandleFunc("GET /articles", s.articles)
-	mux.HandleFunc("GET /articles/{slug}", s.article)
-	mux.HandleFunc("GET /notes", s.notes)
-	mux.HandleFunc("GET /notes/{rkey}", s.note)
-	mux.HandleFunc("GET /tags", s.tags)
-	mux.HandleFunc("GET /tags/{tag}", s.tag)
+	snapshotRoute := func(pattern string, handler http.HandlerFunc) {
+		if deps.Store == nil {
+			handler = func(w http.ResponseWriter, r *http.Request) { s.unavailable(w, r, content.ErrNoSnapshot) }
+		}
+		mux.HandleFunc(pattern, handler)
+	}
+	snapshotRoute("GET /{$}", s.home)
+	snapshotRoute("GET /index.xml", s.feed)
+	snapshotRoute("GET /articles", s.articles)
+	snapshotRoute("GET /articles/{slug}", s.article)
+	snapshotRoute("GET /notes", s.notes)
+	snapshotRoute("GET /notes/{rkey}", s.note)
+	snapshotRoute("GET /tags", s.tags)
+	snapshotRoute("GET /tags/{tag}", s.tag)
 	mux.HandleFunc("GET /media/{cid}", s.media)
 
 	return s, nil
@@ -123,17 +134,52 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 // ServeHTTP permanently redirects paths with a trailing slash to the same path
 // without it, then routes the request.
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rPath := r.URL.Path
-	if strings.HasSuffix(rPath, "/") && rPath != "/" {
-		target := strings.TrimRight(rPath, "/")
-		query := r.URL.RawQuery
-		if query != "" {
-			target += "?" + query
+	rPath := r.URL.EscapedPath()
+	if strings.HasSuffix(rPath, "/") && rPath != "/" && !strings.HasPrefix(rPath, "/blog/") {
+		// Exactly one leading slash: Location must be a path, never an authority.
+		target := "/" + strings.Trim(rPath, "/")
+		if r.URL.RawQuery != "" || r.URL.ForceQuery {
+			target += "?" + r.URL.RawQuery
 		}
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Location", target)
+		w.WriteHeader(http.StatusMovedPermanently)
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	// Successful public pages (including the feed and publication identity)
+	// share a short freshness window and can be served stale on an outage.
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		path := r.URL.Path
+		switch {
+		case strings.HasPrefix(path, "/media/"):
+			w.Header().Set("Cache-Control", immutableCache)
+		case strings.HasPrefix(path, "/static/"), path == "/healthz", path == "/robots.txt":
+			// Static verifies the content version itself. Leave utility endpoints alone.
+		default:
+			w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=60, stale-if-error=604800")
+		}
+	}
+	s.mux.ServeHTTP(cacheWriter{w}, r)
+}
+
+const immutableCache = "public, max-age=31536000, immutable"
+
+// cacheWriter replaces the success policy before an error is sent. This also
+// covers plain-text errors (e.g. from media/static) without buffering a body.
+type cacheWriter struct{ http.ResponseWriter }
+
+func (w cacheWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w cacheWriter) WriteHeader(status int) {
+	switch {
+	case status == http.StatusNotFound:
+		w.Header().Set("Cache-Control", "public, max-age=60")
+	case status >= 500:
+		w.Header().Set("Cache-Control", "no-store")
+	case status >= 300 && status != http.StatusNotModified:
+		w.Header().Del("Cache-Control")
+	}
+	w.ResponseWriter.WriteHeader(status)
 }
 
 // renderError writes the 404 or 503 page with that status.
@@ -154,7 +200,10 @@ func (s *server) renderError(w http.ResponseWriter, r *http.Request, status int)
 // succeeded, so a failure never sends a half-written page.
 func (s *server) render(w http.ResponseWriter, r *http.Request, name string, status int, p Page) {
 	p.Path = r.URL.Path
-	p.Config = s.cfg
+	if p.CanonicalURL == "" {
+		p.CanonicalURL = s.cfg.SiteURL + r.URL.EscapedPath()
+	}
+	p.Config = PublicConfig{SiteURL: s.cfg.SiteURL, WebmentionDomain: s.cfg.WebmentionDomain}
 	p.Year = s.deps.Now().Year()
 
 	var buf bytes.Buffer

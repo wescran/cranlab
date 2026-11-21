@@ -3,24 +3,27 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/pds/pdstest"
+	"github.com/wescran/cranlab/internal/store"
 )
 
 const (
 	testDID         = "did:plc:ogl52fc2rdooori2ayf74can"
 	testPublication = "at://did:plc:ogl52fc2rdooori2ayf74can/site.standard.publication/3mxcsltpg2k26"
-	catCID          = "bafkreicatcatcatcatcat"
-	htmlCID         = "bafkreihtmlhtmlhtml"
-	thumbCID        = "bafkreithumbthumb"
+	catCID          = "bafkreigqcnqu3qkkg7xcb7usabltpk35gqt6p2jvqcwvn34kiiqf4732jy"
+	htmlCID         = "bafkreic4cqgtlxfunjrc4lhn6xxvzq3drtp72harrsjtd6giizu7bn2hqm"
+	thumbCID        = "bafkreiaf53wc24eek2knhoujvwpbynfwwtmamj24hrr3qqsbuqfoiwi4uq"
 )
 
 type fixture struct {
 	pds     *pdstest.Server
 	handler http.Handler
+	store   *store.Store
 }
 
 // newFixture serves the site from a fake PDS holding:
@@ -43,6 +46,7 @@ func newFixture(t *testing.T) *fixture {
 			"$type": "at.markpub.markdown", "flavor": "gfm",
 			"text": map[string]any{"$type": "at.markpub.text", "markdown": "## Hi\n\n![a cat](https://weslandia.ca/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Aogl52fc2rdooori2ayf74can&cid=" + catCID + ")\n"},
 		},
+		"coverImage":  map[string]any{"$type": "blob", "ref": map[string]string{"$link": catCID}, "mimeType": "image/png", "size": 3},
 		"bskyPostRef": map[string]string{"uri": "at://" + testDID + "/app.bsky.feed.post/3mwelcome", "cid": "bafyreipost"},
 	})
 	fake.Put(pds.DocumentCollection, "3mhomelab", map[string]any{
@@ -90,13 +94,30 @@ func newFixture(t *testing.T) *fixture {
 	fake.PutBlob(catCID, "image/png", []byte("png bytes"))
 	fake.PutBlob(htmlCID, "text/html", []byte("<script>alert(1)</script>"))
 
+	return startFixture(t, fake, true)
+}
+
+func startFixture(t *testing.T, fake *pdstest.Server, expectRefresh bool) *fixture {
+	t.Helper()
 	cfg := testConfig()
+	client := pds.New(fake.URL, fake.Client())
+	s, err := store.Open(filepath.Join(t.TempDir(), "cache.db"), cfg.DID, cfg.PublicationURI, cfg.SiteURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	if err := s.RefreshArticles(t.Context(), client); (err == nil) != expectRefresh {
+		t.Fatalf("startup refresh: %v", err)
+	}
+	if err := s.RefreshPosts(t.Context(), client, true); (err == nil) != expectRefresh {
+		t.Fatalf("posts refresh: %v", err)
+	}
 	h, err := New(cfg, Deps{
-		PDS: pds.New(fake.URL, fake.Client()),
+		Store: s, Blobs: client,
 		Now: func() time.Time { return time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return &fixture{pds: fake, handler: h}
+	return &fixture{pds: fake, handler: h, store: s}
 }

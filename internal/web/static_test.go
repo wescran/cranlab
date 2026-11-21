@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -39,6 +40,30 @@ func TestStaticURLChangesWithContent(t *testing.T) {
 	}
 }
 
+func TestIndexedAssetUnavailable(t *testing.T) {
+	files := fstest.MapFS{"site.css": {Data: []byte("body{}")}}
+	assets, err := newStatic(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &server{mux: http.NewServeMux()}
+	s.mux.Handle("GET /static/{path...}", assets)
+	delete(files, "site.css") // The manifest still promises this asset.
+	for _, tc := range []struct {
+		name   string
+		status int
+		cache  string
+	}{
+		{"site.css", 503, "no-store"},
+		{"unknown.css", 404, "public, max-age=60"},
+	} {
+		rec := get(t, s, "/static/"+tc.name)
+		if cc := rec.Result().Header.Get("Cache-Control"); rec.Code != tc.status || cc != tc.cache {
+			t.Errorf("GET %s = %d, Cache-Control %q; want %d, %q", tc.name, rec.Code, cc, tc.status, tc.cache)
+		}
+	}
+}
+
 func TestStaticServe(t *testing.T) {
 	s, err := newStatic(fstest.MapFS{
 		"css/main.css":            {Data: []byte("body{}")},
@@ -61,17 +86,20 @@ func TestStaticServe(t *testing.T) {
 		"/static/images/card-default.png": "image/png",
 	}
 	for path, want := range types {
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+"?v=anything", nil))
+		versioned, err := s.url(strings.TrimPrefix(path, "/static/"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := get(t, mux, versioned)
+		if cc := rec.Result().Header.Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
+			t.Errorf("GET %s Cache-Control = %q", versioned, cc)
+		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("GET %s = %d", path, rec.Code)
 			continue
 		}
 		if ct := rec.Header().Get("Content-Type"); ct != want {
 			t.Errorf("GET %s Content-Type = %q, want %q", path, ct, want)
-		}
-		if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
-			t.Errorf("GET %s Cache-Control = %q", path, cc)
 		}
 	}
 

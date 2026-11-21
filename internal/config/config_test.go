@@ -38,9 +38,17 @@ func TestLoadAll(t *testing.T) {
 		PublicationURI:   "at://did:plc:ogl52fc2rdooori2ayf74can/site.standard.publication/3mxcsltpg2k26",
 		WebmentionDomain: "cranlab.ca",
 		AppPassword:      password,
+		CacheDBPath:      "./cache.db",
 	}
 	if got != want {
 		t.Errorf("Load =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+func TestCacheDBPath(t *testing.T) {
+	cfg, err := Load(env(map[string]string{"CACHE_DB_PATH": " /data/articles.db "}))
+	if err != nil || cfg.CacheDBPath != "/data/articles.db" {
+		t.Fatalf("cache path: %q, %v", cfg.CacheDBPath, err)
 	}
 }
 
@@ -102,6 +110,9 @@ func TestLoadTrims(t *testing.T) {
 
 func TestLoadRejectsBadValues(t *testing.T) {
 	tests := []struct{ name, value string }{
+		{"SITE_URL", "////"},
+		{"PDS_URL", "////"},
+		{"PDS_PUBLIC_URL", "////"},
 		{"SITE_URL", "cranlab.ca"},
 		{"SITE_URL", "ftp://cranlab.ca"},
 		{"SITE_URL", "https://"},
@@ -115,6 +126,9 @@ func TestLoadRejectsBadValues(t *testing.T) {
 			_, err := Load(env(map[string]string{tt.name: tt.value}))
 			if err == nil {
 				t.Fatalf("Load with %s=%q: want an error", tt.name, tt.value)
+			}
+			if strings.Contains(err.Error(), tt.value) {
+				t.Errorf("error leaks invalid value: %q", err)
 			}
 			if !strings.Contains(err.Error(), tt.name) {
 				t.Errorf("error %q doesn't name %s", err, tt.name)

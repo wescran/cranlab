@@ -3,7 +3,15 @@ package render
 import (
 	"testing"
 
+	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
+)
+
+// Facet feature types.
+const (
+	featureLink    = "app.bsky.richtext.facet#link"
+	featureMention = "app.bsky.richtext.facet#mention"
+	featureTag     = "app.bsky.richtext.facet#tag"
 )
 
 func facet(start, end int, feature pds.Feature) pds.Facet {
@@ -81,6 +89,7 @@ func TestFacets(t *testing.T) {
 			[]pds.Facet{facet(0, 5, pds.Feature{Type: "app.example.facet#sparkle"})},
 			"fancy",
 		},
+		{"hostless web URL stays text", "link", []pds.Facet{facet(0, 4, link("http:/path"))}, "link"},
 		{"past the end", "short", []pds.Facet{facet(0, 99, link("https://e.com"))}, "short"},
 		{"empty range", "short", []pds.Facet{facet(2, 2, link("https://e.com"))}, "short"},
 		{"backwards range", "short", []pds.Facet{facet(3, 1, link("https://e.com"))}, "short"},
@@ -98,7 +107,7 @@ func TestFacets(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := string(Facets(tt.text, tt.facets)); got != tt.want {
+			if got := string(Facets(tt.text, content.ProjectFacets(tt.facets))); got != tt.want {
 				t.Errorf("Facets =\n  %s\nwant\n  %s", got, tt.want)
 			}
 		})
