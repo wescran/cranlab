@@ -105,6 +105,9 @@ func TestHome(t *testing.T) {
 	if got := property(card, "url"); got != "https://cranlab.ca/" {
 		t.Errorf("h-card url = %q, want https://cranlab.ca/", got)
 	}
+	if got := property(card, "uid"); got != "https://cranlab.ca/" {
+		t.Errorf("representative h-card uid = %q, want canonical home URL", got)
+	}
 	if photo := property(card, "photo"); !strings.HasPrefix(photo, "https://cranlab.ca/static/images/profile-200.jpeg?v=") {
 		t.Errorf("h-card photo = %q, want the versioned profile image", photo)
 	}

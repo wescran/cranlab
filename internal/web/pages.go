@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/wescran/cranlab/internal/content"
@@ -85,10 +86,8 @@ func noteViews(posts []pds.Record[pds.Post]) []NoteView {
 	panic("not implemented")
 }
 
-// home shows the latest article (if any) and the newest homeNotes notes.
-// Description: "CranLab by Wesley Cranston". A PDS error is a 503.
 func (s *server) home(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	s.render(w, r, "home", http.StatusOK, Page{Description: "CranLab by Wesley Cranston", Data: HomePage{}})
 }
 
 // articles lists every article. Title "Articles", description "Articles by
@@ -123,7 +122,12 @@ func (s *server) article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := ArticlePage{ArticleSummary: summarize(a), Body: body, SyndicationURL: render.PostURL(a.AnnouncementURI)}
-	s.render(w, r, "article", http.StatusOK, Page{Title: a.Title, Description: view.Description, Data: view})
+	page := Page{Title: a.Title, Description: view.Description, Data: view, CanonicalURL: s.cfg.SiteURL + view.URL}
+	page.DocumentID = strings.TrimPrefix(a.URI, "at://")
+	if cidPattern.MatchString(a.CoverCID) {
+		page.CoverCID = a.CoverCID
+	}
+	s.render(w, r, "article", http.StatusOK, page)
 }
 
 // notes lists notesPerPage notes, starting after ?cursor= (ignored unless it

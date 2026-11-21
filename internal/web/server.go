@@ -43,7 +43,11 @@ type Page struct {
 	// Title is the page's title; empty on the home page.
 	Title string
 	// Description fills <meta name="description">.
-	Description string
+	Description  string
+	CanonicalURL string
+	CoverCID     string
+	// DocumentID is an Article record identifier without the literal at:// scheme.
+	DocumentID string
 	// Path is the request path, used to mark the current navigation item.
 	Path string
 	// Year is the current year, for the footer.
@@ -106,6 +110,10 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
+	mux.HandleFunc("GET /.well-known/site.standard.publication", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(cfg.PublicationURI))
+	})
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("User-agent: *\nAllow: /\n"))
@@ -122,6 +130,7 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 		}
 		mux.HandleFunc(pattern, handler)
 	}
+	articleRoute("GET /index.xml", s.feed)
 	articleRoute("GET /articles", s.articles)
 	articleRoute("GET /articles/{slug}", s.article)
 	mux.HandleFunc("GET /notes", s.notes)
@@ -202,6 +211,9 @@ func (s *server) renderError(w http.ResponseWriter, r *http.Request, status int)
 // succeeded, so a failure never sends a half-written page.
 func (s *server) render(w http.ResponseWriter, r *http.Request, name string, status int, p Page) {
 	p.Path = r.URL.Path
+	if p.CanonicalURL == "" {
+		p.CanonicalURL = s.cfg.SiteURL + r.URL.EscapedPath()
+	}
 	p.Config = PublicConfig{SiteURL: s.cfg.SiteURL, WebmentionDomain: s.cfg.WebmentionDomain}
 	p.Year = s.deps.Now().Year()
 

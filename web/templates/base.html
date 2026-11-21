@@ -9,6 +9,14 @@
 <meta name="author" content="Wesley Cranston">
 <meta name="description" content="{{with .Description}}{{.}}{{else}}my personal site{{end}}">
 
+<link rel="canonical" href="{{.CanonicalURL}}">
+{{with .DocumentID}}<link rel="site.standard.document" href="at://{{.}}">{{end}}
+<meta property="og:type" content="{{if .DocumentID}}article{{else}}website{{end}}">
+<meta property="og:title" content="{{with .Title}}{{.}}{{else}}CranLab{{end}}">
+<meta property="og:url" content="{{.CanonicalURL}}">
+<meta property="og:description" content="{{with .Description}}{{.}}{{else}}my personal site{{end}}">
+<meta property="og:image" content="{{.Config.SiteURL}}{{with .CoverCID}}/media/{{.}}{{else}}{{asset "images/card-default.png"}}{{end}}">
+
 <link rel="icon" type="image/png" sizes="32x32" href="{{asset "images/favicon-32.png"}}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{asset "images/apple-touch-icon.png"}}">
 
@@ -20,7 +28,7 @@
 <link rel="webmention" href="https://webmention.io/{{.Config.WebmentionDomain}}/webmention">
 
 {{- /* RSS autodiscovery */}}
-<link rel="alternate" type="application/rss+xml" href="/index.xml" title="CranLab - RSS">
+<link rel="alternate" type="application/rss+xml" href="{{.Config.SiteURL}}/index.xml" title="CranLab - RSS">
 
 {{- /* Preload the body font (used on every page) to avoid a fallback-font
      flash. Same unversioned URL as main.css's @font-face, or the browser
