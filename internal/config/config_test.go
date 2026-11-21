@@ -38,9 +38,17 @@ func TestLoadAll(t *testing.T) {
 		PublicationURI:   "at://did:plc:ogl52fc2rdooori2ayf74can/site.standard.publication/3mxcsltpg2k26",
 		WebmentionDomain: "cranlab.ca",
 		AppPassword:      password,
+		CacheDBPath:      "./cache.db",
 	}
 	if got != want {
 		t.Errorf("Load =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+func TestCacheDBPath(t *testing.T) {
+	cfg, err := Load(env(map[string]string{"CACHE_DB_PATH": " /data/articles.db "}))
+	if err != nil || cfg.CacheDBPath != "/data/articles.db" {
+		t.Fatalf("cache path: %q, %v", cfg.CacheDBPath, err)
 	}
 }
 

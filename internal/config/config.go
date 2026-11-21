@@ -18,11 +18,12 @@ type Config struct {
 	PDSPublicURL     string // PDS_PUBLIC_URL, e.g. https://weslandia.ca
 	PublicationURI   string // PUBLICATION_URI
 	WebmentionDomain string // WEBMENTION_DOMAIN, e.g. cranlab.ca
+	CacheDBPath      string // CACHE_DB_PATH (optional; defaults to ./cache.db)
 	AppPassword      string // APP_PASSWORD (optional; empty disables syndication)
 }
 
 // Load reads and validates the configuration through getenv. Every variable
-// except APP_PASSWORD is required; all problems are reported together. URLs
+// except APP_PASSWORD and CACHE_DB_PATH is required; all problems are reported together. URLs
 // lose any trailing slash.
 func Load(getenv func(string) string) (Config, error) {
 	var errs []error
@@ -58,6 +59,10 @@ func Load(getenv func(string) string) (Config, error) {
 		PublicationURI:   value("PUBLICATION_URI", true),
 		WebmentionDomain: value("WEBMENTION_DOMAIN", true),
 		AppPassword:      value("APP_PASSWORD", false),
+		CacheDBPath:      value("CACHE_DB_PATH", false),
+	}
+	if c.CacheDBPath == "" {
+		c.CacheDBPath = "./cache.db"
 	}
 	check("DID", c.DID, strings.HasPrefix(c.DID, "did:"), `a DID (starting with "did:")`)
 	check("PUBLICATION_URI", c.PublicationURI, strings.HasPrefix(c.PublicationURI, "at://"), `an AT-URI (starting with "at://")`)

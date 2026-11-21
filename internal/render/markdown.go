@@ -3,7 +3,6 @@ package render
 
 import (
 	"bytes"
-	"encoding/json/v2"
 	"html/template"
 	"net/url"
 	"strings"
@@ -15,8 +14,6 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
-
-	"github.com/wescran/cranlab/internal/pds"
 )
 
 // Options configure ArticleBody.
@@ -32,7 +29,7 @@ type Options struct {
 // block.
 func textFallback(text string) string {
 	split := strings.Split(text, "\n\n")
-	result := make([]string, len(split))
+	result := make([]string, 0, len(split))
 	for _, block := range split {
 		newBlock := strings.TrimSpace(block)
 		if newBlock == "" {
@@ -48,24 +45,9 @@ func textFallback(text string) string {
 // content is rendered as GFM with raw HTML kept (only the owner's records are
 // rendered), callouts, and the owner's blob URLs pointed at /media. Any other
 // content falls back to the escaped textContent.
-func ArticleBody(doc pds.Document, o Options) (template.HTML, error) {
-	var content struct {
-		Type string `json:"$type"`
-		Text struct {
-			Markdown string `json:"markdown"`
-		} `json:"text"`
-	}
-
-	if len(doc.Content) == 0 {
-		return template.HTML(textFallback(doc.TextContent)), nil
-	}
-
-	if err := json.Unmarshal(doc.Content, &content); err != nil {
-		return template.HTML(textFallback(doc.TextContent)), nil
-	}
-
-	if content.Type != "at.markpub.markdown" {
-		return template.HTML(textFallback(doc.TextContent)), nil
+func ArticleBody(markdown *string, textContent string, o Options) (template.HTML, error) {
+	if markdown == nil {
+		return template.HTML(textFallback(textContent)), nil
 	}
 
 	md := goldmark.New(
@@ -75,7 +57,7 @@ func ArticleBody(doc pds.Document, o Options) (template.HTML, error) {
 	)
 
 	var buf bytes.Buffer
-	if err := md.Convert([]byte(content.Text.Markdown), &buf); err != nil {
+	if err := md.Convert([]byte(*markdown), &buf); err != nil {
 		return template.HTML(""), err
 	}
 	return template.HTML(buf.String()), nil

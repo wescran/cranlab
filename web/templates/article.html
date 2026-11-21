@@ -7,7 +7,7 @@
       </a>
       <p class="byline">
         <span><a class="p-author h-card p-name u-url" href="{{$.Config.SiteURL}}/">Wesley Cranston</a></span>
-        <time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>
+        {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
         <span>{{.ReadingTime}} min read</span>
         {{- with .SyndicationURL}}
         <span><a class="u-syndication" href="{{.}}">Also on Bluesky</a></span>

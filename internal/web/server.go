@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/wescran/cranlab/internal/config"
+	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
 	site "github.com/wescran/cranlab/web"
 )
@@ -22,6 +23,7 @@ const SiteTitle = "CranLab"
 
 // Deps are the server's collaborators.
 type Deps struct {
+	Store content.ContentStore
 	// PDS is where content is read from.
 	PDS PDS
 	// Now returns the current time. Nil means time.Now.
@@ -30,7 +32,6 @@ type Deps struct {
 
 // PDS is what the site reads from the PDS (satisfied by *pds.Client).
 type PDS interface {
-	ListDocuments(ctx context.Context, did string) (pds.DocumentListing, error)
 	ListPosts(ctx context.Context, did, cursor string, limit int) ([]pds.Record[pds.Post], string, error)
 	GetPost(ctx context.Context, did, rkey string) (pds.Record[pds.Post], error)
 	GetBlob(ctx context.Context, did, cid string) (io.ReadCloser, string, error)
@@ -46,11 +47,13 @@ type Page struct {
 	Path string
 	// Year is the current year, for the footer.
 	Year int
-	// Config holds the site settings.
-	Config config.Config
+	// Config contains only publicly visible template settings.
+	Config PublicConfig
 	// Data is the page's own content: one of the view types in views.go.
 	Data any
 }
+
+type PublicConfig struct{ SiteURL, WebmentionDomain string }
 
 type server struct {
 	cfg    config.Config
@@ -109,12 +112,18 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 		s.renderError(w, r, http.StatusNotFound)
 	})
 	mux.Handle("GET /static/{path...}", staticHandler)
-	mux.HandleFunc("GET /articles", s.articles)
-	mux.HandleFunc("GET /articles/{slug}", s.article)
+	articleRoute := func(pattern string, handler http.HandlerFunc) {
+		if deps.Store == nil {
+			handler = func(w http.ResponseWriter, r *http.Request) { s.unavailable(w, r, content.ErrNoSnapshot) }
+		}
+		mux.HandleFunc(pattern, handler)
+	}
+	articleRoute("GET /articles", s.articles)
+	articleRoute("GET /articles/{slug}", s.article)
 	mux.HandleFunc("GET /notes", s.notes)
 	mux.HandleFunc("GET /notes/{rkey}", s.note)
-	mux.HandleFunc("GET /tags", s.tags)
-	mux.HandleFunc("GET /tags/{tag}", s.tag)
+	articleRoute("GET /tags", s.tags)
+	articleRoute("GET /tags/{tag}", s.tag)
 	mux.HandleFunc("GET /media/{cid}", s.media)
 
 	return s, nil
@@ -189,7 +198,7 @@ func (s *server) renderError(w http.ResponseWriter, r *http.Request, status int)
 // succeeded, so a failure never sends a half-written page.
 func (s *server) render(w http.ResponseWriter, r *http.Request, name string, status int, p Page) {
 	p.Path = r.URL.Path
-	p.Config = s.cfg
+	p.Config = PublicConfig{SiteURL: s.cfg.SiteURL, WebmentionDomain: s.cfg.WebmentionDomain}
 	p.Year = s.deps.Now().Year()
 
 	var buf bytes.Buffer

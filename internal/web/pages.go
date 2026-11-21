@@ -4,11 +4,13 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"time"
 
 	"github.com/wescran/cranlab/internal/content"
 	"github.com/wescran/cranlab/internal/pds"
+	"github.com/wescran/cranlab/internal/render"
 )
 
 // pdsTimeout bounds the PDS calls for one request.
@@ -28,34 +30,47 @@ func (s *server) pdsContext(r *http.Request) (context.Context, context.CancelFun
 	return context.WithTimeout(r.Context(), pdsTimeout)
 }
 
-// unavailable logs a PDS failure and serves the 503 page.
+// unavailable logs a source failure and serves the 503 page.
 func (s *server) unavailable(w http.ResponseWriter, r *http.Request, err error) {
-	slog.Error("pds", "path", r.URL.Path, "err", err)
+	slog.Error("source unavailable", "path", r.URL.Path, "err", err)
 	s.renderError(w, r, http.StatusServiceUnavailable)
-}
-
-// loadArticles lists the owner's documents and picks out the publication's
-// articles (content.Articles). It returns the documents too, which callers
-// need to recognise announcement posts.
-func (s *server) loadArticles(ctx context.Context) ([]content.Article, []pds.Record[pds.Document], error) {
-	panic("not implemented")
 }
 
 // summarize describes an article for lists: URL "/articles/<slug,
 // path-escaped>", title, description (or, without one, an excerpt of its
 // textContent, 160 characters), published time, reading time and tag links.
 func summarize(a content.Article) ArticleSummary {
-	panic("not implemented")
+	description := a.Description
+	if description == "" {
+		description = render.Excerpt(a.TextContent, 160)
+	}
+	return ArticleSummary{
+		URL: content.ArticlePrefix + url.PathEscape(a.Slug), Title: a.Title,
+		Description: description, Published: a.Published, HasPublished: a.HasPublished,
+		ReadingTime: render.ReadingTime(a.TextContent), Tags: tagLinks(a.Tags),
+	}
 }
 
 // tagLinks links each tag to "/tags/<tag, path-escaped>".
 func tagLinks(tags []string) []TagLink {
-	panic("not implemented")
+	var links []TagLink
+	for _, t := range tags {
+		links = append(links, tagLink(t))
+	}
+	return links
+}
+
+func tagLink(t string) TagLink {
+	return TagLink{Name: t, URL: "/tags/" + url.PathEscape(t)}
 }
 
 // summaries summarizes each article, keeping their order.
 func summaries(articles []content.Article) []ArticleSummary {
-	panic("not implemented")
+	out := make([]ArticleSummary, 0, len(articles))
+	for _, a := range articles {
+		out = append(out, summarize(a))
+	}
+	return out
 }
 
 // noteView describes a post: URL "/notes/<rkey>", text with facets
@@ -79,7 +94,12 @@ func (s *server) home(w http.ResponseWriter, r *http.Request) {
 // articles lists every article. Title "Articles", description "Articles by
 // Wesley Cranston". A PDS error is a 503.
 func (s *server) articles(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	articles, err := s.deps.Store.Articles(r.Context())
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	s.render(w, r, "articles", http.StatusOK, Page{Title: "Articles", Description: "Articles by Wesley Cranston", Data: ArticlesPage{Articles: summaries(articles)}})
 }
 
 // article shows the article whose slug is {slug}, or the 404 page. Its body
@@ -88,7 +108,22 @@ func (s *server) articles(w http.ResponseWriter, r *http.Request) {
 // description falls back to the excerpt, as in summarize). A PDS or render
 // error is a 503.
 func (s *server) article(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	a, ok, err := s.deps.Store.FindArticle(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	if !ok {
+		s.renderError(w, r, http.StatusNotFound)
+		return
+	}
+	body, err := render.ArticleBody(a.Markdown, a.TextContent, render.Options{DID: s.cfg.DID, PDSPublicURL: s.cfg.PDSPublicURL})
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	view := ArticlePage{ArticleSummary: summarize(a), Body: body, SyndicationURL: render.PostURL(a.AnnouncementURI)}
+	s.render(w, r, "article", http.StatusOK, Page{Title: a.Title, Description: view.Description, Data: view})
 }
 
 // notes lists notesPerPage notes, starting after ?cursor= (ignored unless it
@@ -111,12 +146,33 @@ func (s *server) note(w http.ResponseWriter, r *http.Request) {
 // tags lists every tag with its count. Title "Tags", description "Article
 // tags". A PDS error is a 503.
 func (s *server) tags(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	tags, err := s.deps.Store.Tags(r.Context())
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	var links []TagLink
+	for _, t := range tags {
+		l := tagLink(t.Tag)
+		l.Count = t.Count
+		links = append(links, l)
+	}
+	s.render(w, r, "tags", http.StatusOK, Page{Title: "Tags", Description: "Article tags", Data: TagsPage{Tags: links}})
 }
 
 // tag lists the articles tagged {tag} (exact match), or the 404 page if
 // there are none. Title: the tag; description: "Articles tagged <tag>". A PDS
 // error is a 503.
 func (s *server) tag(w http.ResponseWriter, r *http.Request) {
-	panic("not implemented")
+	tag := r.PathValue("tag")
+	articles, err := s.deps.Store.WithTag(r.Context(), tag)
+	if err != nil {
+		s.unavailable(w, r, err)
+		return
+	}
+	if len(articles) == 0 {
+		s.renderError(w, r, http.StatusNotFound)
+		return
+	}
+	s.render(w, r, "tag", http.StatusOK, Page{Title: tag, Description: "Articles tagged " + tag, Data: TagPage{Tag: tag, Articles: summaries(articles)}})
 }

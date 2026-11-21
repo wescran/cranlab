@@ -10,7 +10,8 @@
 
 {{define "article-summary"}}
 <article class="h-entry">
-  <time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>
+  {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
+  <span>{{.ReadingTime}} min read</span>
   <a class="p-name u-url" href="{{.URL}}">{{.Title}}</a>
   {{template "tags" .Tags}}
   {{with .Description}}<p class="p-summary">{{.}}</p>{{end}}

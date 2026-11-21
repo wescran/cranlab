@@ -3,11 +3,13 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/pds/pdstest"
+	"github.com/wescran/cranlab/internal/store"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 type fixture struct {
 	pds     *pdstest.Server
 	handler http.Handler
+	store   *store.Store
 }
 
 // newFixture serves the site from a fake PDS holding:
@@ -90,13 +93,27 @@ func newFixture(t *testing.T) *fixture {
 	fake.PutBlob(catCID, "image/png", []byte("png bytes"))
 	fake.PutBlob(htmlCID, "text/html", []byte("<script>alert(1)</script>"))
 
+	return startFixture(t, fake, true)
+}
+
+func startFixture(t *testing.T, fake *pdstest.Server, expectRefresh bool) *fixture {
+	t.Helper()
 	cfg := testConfig()
+	client := pds.New(fake.URL, fake.Client())
+	s, err := store.Open(filepath.Join(t.TempDir(), "cache.db"), cfg.DID, cfg.PublicationURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	if err := s.RefreshArticles(t.Context(), client); (err == nil) != expectRefresh {
+		t.Fatalf("startup refresh: %v", err)
+	}
 	h, err := New(cfg, Deps{
-		PDS: pds.New(fake.URL, fake.Client()),
+		Store: s, PDS: client,
 		Now: func() time.Time { return time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return &fixture{pds: fake, handler: h}
+	return &fixture{pds: fake, handler: h, store: s}
 }

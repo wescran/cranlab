@@ -5,6 +5,11 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /site ./cmd/site
 
+RUN mkdir /cache
+
 FROM gcr.io/distroless/static-debian13:nonroot
+COPY --from=build --chown=65532:65532 /cache /var/lib/cranlab
+ENV CACHE_DB_PATH=/var/lib/cranlab/cache.db
+VOLUME ["/var/lib/cranlab"]
 COPY --from=build /site /site
 ENTRYPOINT ["/site"]

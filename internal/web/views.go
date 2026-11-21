@@ -26,12 +26,13 @@ type ArticlesPage struct {
 // ArticleSummary is an article in a list.
 type ArticleSummary struct {
 	// URL is the article's path, e.g. "/articles/welcome".
-	URL         string
-	Title       string
-	Description string
-	Published   time.Time
-	ReadingTime int // minutes
-	Tags        []TagLink
+	URL          string
+	Title        string
+	Description  string
+	Published    time.Time
+	HasPublished bool
+	ReadingTime  int // minutes
+	Tags         []TagLink
 }
 
 // ArticlePage is one article.

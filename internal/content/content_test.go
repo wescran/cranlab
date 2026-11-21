@@ -257,19 +257,19 @@ func TestNotesError(t *testing.T) {
 
 func TestTags(t *testing.T) {
 	articles := Articles([]pds.Record[pds.Document]{
-		doc("3m1", "/articles/one", "2026-10-03T00:00:00Z", "homelab", "Go"),
+		doc("3m1", "/articles/one", "2026-10-03T00:00:00Z", "homelab", " Go ", "GO", " "),
 		doc("3m2", "/articles/two", "2026-10-02T00:00:00Z", "writing", "homelab"),
 		doc("3m3", "/articles/three", "2026-10-01T00:00:00Z", "atproto"),
 	}, publication)
-	want := []TagCount{{"atproto", 1}, {"Go", 1}, {"homelab", 2}, {"writing", 1}}
+	want := []TagCount{{"atproto", 1}, {"go", 1}, {"homelab", 2}, {"writing", 1}}
 	if got := Tags(articles); !reflect.DeepEqual(got, want) {
 		t.Errorf("Tags = %v, want %v (sorted ignoring case)", got, want)
 	}
 	if got := slugs(WithTag(articles, "homelab")); !reflect.DeepEqual(got, []string{"one", "two"}) {
 		t.Errorf("WithTag(homelab) = %v", got)
 	}
-	if got := WithTag(articles, "go"); len(got) != 0 {
-		t.Errorf("tags match exactly: WithTag(go) = %v", slugs(got))
+	if got := slugs(WithTag(articles, "go")); !reflect.DeepEqual(got, []string{"one"}) {
+		t.Errorf("WithTag(go) = %v", got)
 	}
 	if got := Tags(nil); len(got) != 0 {
 		t.Errorf("Tags(nil) = %v", got)
