@@ -26,6 +26,7 @@ type Server struct {
 	DID string
 
 	mu            sync.Mutex
+	revision      uint64
 	records       map[string]map[string]record // collection → rkey → record
 	blobs         map[string]blob              // cid → blob
 	failWith      int
@@ -81,6 +82,7 @@ func New(t testing.TB, did string) *Server {
 	mux.HandleFunc("POST /xrpc/com.atproto.repo.uploadBlob", s.uploadBlob)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.listRecords", s.listRecords)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.getRecord", s.getRecord)
+	mux.HandleFunc("GET /xrpc/com.atproto.sync.getLatestCommit", s.latestCommit)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.getBlob", s.getBlob)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.subscribeRepos", func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, nil)
@@ -132,6 +134,7 @@ func (s *Server) putLocked(collection, rkey string, raw jsontext.Value) string {
 	if s.records[collection] == nil {
 		s.records[collection] = map[string]record{}
 	}
+	s.revision++
 	s.records[collection][rkey] = record{cid: cid, value: raw}
 	return cid
 }
@@ -144,6 +147,7 @@ func (s *Server) Delete(collection, rkey string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.records[collection], rkey)
+	s.revision++
 }
 
 // PutBlob stores a blob under cid.

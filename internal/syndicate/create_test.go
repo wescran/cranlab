@@ -59,6 +59,46 @@ func TestThreeOldestEligiblePerRun(t *testing.T) {
 	}
 }
 
+func TestOversizedTextDoesNotStarveRepresentableArticles(t *testing.T) {
+	f := pdstest.New(t, did)
+	c := pds.New(f.URL, nil)
+	// Equal dates: record keys order the two invalid Articles first. Include
+	// the exact link in the limit; a decomposed accent is one grapheme, not two.
+	suffix := "\n\n" + origin + "/articles/c"
+	f.PutBlob("bafkreicover", "image/png", []byte{1, 2, 3})
+	var source articles
+	for _, tc := range []struct{ key, title string }{
+		{"a", strings.Repeat("a", 301-len(suffix))},
+		{"b", "e" + strings.Repeat("\u0301", 1500)},
+		{"c", strings.Repeat("e\u0301", 300-len(suffix))},
+		{"d", "Second"}, {"e", "Third"},
+	} {
+		d := document(tc.key, "2026-11-08T01:00:00Z")
+		d.Title = tc.title
+		if tc.key >= "c" {
+			d.CoverImage = &pds.Blob{Type: "blob", MIMEType: "image/png", Size: 3}
+			d.CoverImage.Ref.Link = "bafkreicover"
+		}
+		source = append(source, seed(f, tc.key, d))
+	}
+	syndicate.New(source, c, did, publication, origin, pdstest.Password, slog.Default(), func() time.Time { return daySeven }).Run(t.Context())
+	for _, key := range []string{"a", "b"} {
+		if _, err := c.GetPost(t.Context(), did, key); !errors.Is(err, pds.ErrNotFound) {
+			t.Errorf("unrepresentable Article %s was not skipped: %v", key, err)
+		}
+	}
+	for _, key := range []string{"c", "d", "e"} {
+		if _, err := c.GetPost(t.Context(), did, key); err != nil {
+			t.Errorf("missing representable Article %s: %v", key, err)
+		}
+	}
+	for _, req := range f.Requests() {
+		if req.Path == "/xrpc/com.atproto.repo.uploadBlob" {
+			t.Fatal("uploaded a thumbnail for an unrepresentable Article")
+		}
+	}
+}
+
 func TestAnnouncementWithCoverAndTextExcerpt(t *testing.T) {
 	f := pdstest.New(t, did)
 	c := pds.New(f.URL, nil)

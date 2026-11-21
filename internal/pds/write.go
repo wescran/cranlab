@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
-// ErrSwapConflict means the document has changed since it was read.
-var ErrSwapConflict = errors.New("document CID changed")
+// ErrSwapConflict means the record or repo commit no longer matches the write precondition.
+var ErrSwapConflict = errors.New("CID precondition failed")
 
 // Never follow a redirect carrying credentials, or include response text (which
 // can echo credentials) in an error. Sessions are scoped to one sync run.
@@ -41,7 +42,7 @@ func (c *Client) send(ctx context.Context, method, token, mediaType string, body
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == 400 && method == "com.atproto.repo.putRecord" {
+		if resp.StatusCode == 400 && (method == "com.atproto.repo.putRecord" || method == "com.atproto.repo.createRecord") {
 			var body struct {
 				Error string `json:"error"`
 			}
@@ -84,10 +85,29 @@ func (c *Client) UploadBlob(ctx context.Context, token, mediaType string, data [
 	return result.Blob, err
 }
 
-// CreatePost never replaces a record that won a race for the same key.
-func (c *Client) CreatePost(ctx context.Context, token, did, key string, post map[string]any) (StrongRef, error) {
+// LatestCommit returns the repo commit CID, not its sortable revision string.
+func (c *Client) LatestCommit(ctx context.Context, did string) (string, error) {
+	resp, err := c.get(ctx, "com.atproto.sync.getLatestCommit", url.Values{"did": {did}})
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var commit struct {
+		CID string `json:"cid"`
+	}
+	if json.UnmarshalRead(resp.Body, &commit) != nil || commit.CID == "" {
+		return "", errors.New("missing repo commit CID")
+	}
+	return commit.CID, nil
+}
+
+// CreatePost requires the repo to still match the commit used to verify creation.
+func (c *Client) CreatePost(ctx context.Context, token, did, key, commit string, post map[string]any) (StrongRef, error) {
+	if commit == "" {
+		return StrongRef{}, errors.New("missing createRecord precondition")
+	}
 	var result StrongRef
-	err := c.procedure(ctx, "com.atproto.repo.createRecord", token, map[string]any{"repo": did, "collection": PostCollection, "rkey": key, "record": post}, &result)
+	err := c.procedure(ctx, "com.atproto.repo.createRecord", token, map[string]any{"repo": did, "collection": PostCollection, "rkey": key, "record": post, "swapCommit": commit}, &result)
 	if err == nil && (result.URI != "at://"+did+"/"+PostCollection+"/"+key || result.CID == "") {
 		err = errors.New("unexpected createRecord result")
 	}

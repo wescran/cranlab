@@ -26,11 +26,12 @@ type ArticleSource interface {
 
 // Client uses public reads to verify a creation or repair before acquiring a session.
 type Client interface {
+	LatestCommit(context.Context, string) (string, error)
 	GetPost(context.Context, string, string) (pds.Record[pds.Post], error)
 	GetDocument(context.Context, string, string) (pds.Record[pds.Document], error)
 	CreateSession(context.Context, string, string) (string, error)
 	UploadBlob(context.Context, string, string, []byte) (pds.Blob, error)
-	CreatePost(context.Context, string, string, string, map[string]any) (pds.StrongRef, error)
+	CreatePost(context.Context, string, string, string, string, map[string]any) (pds.StrongRef, error)
 	LinkDocument(context.Context, string, string, string, pds.Record[pds.Document], pds.StrongRef) error
 }
 
@@ -93,9 +94,9 @@ func (r *Runner) Run(ctx context.Context) {
 			continue
 		}
 		err := batch.announce(ctx, a, key, batch.remaining > 0)
-		if errors.Is(err, pds.ErrSwapConflict) {
-			// Bound the retry, and re-verify both records against fresh state.
-			err = batch.announce(ctx, a, key, false)
+		if errors.Is(err, errCreateConflict) || errors.Is(err, pds.ErrSwapConflict) {
+			// Retry once from fresh state. A link conflict may only repair.
+			err = batch.announce(ctx, a, key, errors.Is(err, errCreateConflict))
 		}
 		if err != nil {
 			r.logger.Warn("syndication: review Article", "key", key, "reason", err)
@@ -107,10 +108,21 @@ func (r *Runner) Run(ctx context.Context) {
 }
 
 func (r *run) announce(ctx context.Context, a content.Article, key string, allowCreate bool) error {
+	canCreate := allowCreate && a.HasPublished && eligible(a.Published, r.at)
+	var commit string
+	var headErr error
+	if canCreate {
+		// Take the precondition before either getRecord. A later head could
+		// include an edit that our eligibility/absence checks never saw.
+		commit, headErr = r.client.LatestCommit(ctx, r.did)
+	}
 	post, err := r.client.GetPost(ctx, r.did, key)
 	absent := errors.Is(err, pds.ErrNotFound)
-	if absent && (!allowCreate || !a.HasPublished || !eligible(a.Published, r.at)) {
+	if absent && !canCreate {
 		return nil
+	}
+	if absent && (headErr != nil || commit == "") {
+		return errors.New("repo commit lookup failed")
 	}
 	if err != nil && !absent {
 		return errors.New("Announcement lookup failed")
@@ -132,10 +144,15 @@ func (r *run) announce(ctx context.Context, a content.Article, key string, allow
 		}
 		return nil
 	}
+	var text string
 	if absent {
 		date, err := time.Parse(time.RFC3339, doc.Value.PublishedAt)
 		if err != nil || !eligible(date, r.at) {
 			return nil
+		}
+		text = doc.Value.Title + "\n\n" + canonical
+		if !validPostText(text) {
+			return errors.New("Article exceeds Announcement text limits")
 		}
 	}
 	if r.token == "" {
@@ -146,7 +163,7 @@ func (r *run) announce(ctx context.Context, a content.Article, key string, allow
 	}
 	ref := pds.StrongRef{URI: post.URI, CID: post.CID}
 	if absent {
-		ref, err = r.create(ctx, key, doc.Value, canonical)
+		ref, err = r.create(ctx, key, doc.Value, canonical, text, commit)
 		if err != nil {
 			return err
 		}
