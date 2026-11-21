@@ -23,7 +23,7 @@ func TestSubscribeReposUpdatesRunningSite(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		fake.Put(pds.DocumentCollection, fmt.Sprintf("z%03d", i), pds.Document{})
 	}
-	h, stop, err := siteHandler(t.Context(), cfg)
+	h, stop, err := siteHandler(t.Context(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

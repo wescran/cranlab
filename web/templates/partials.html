@@ -27,8 +27,40 @@
     <a class="u-url" href="{{.URL}}">{{with .Published}}<time class="dt-published" datetime="{{datetime .}}">{{date .}}</time>{{else}}Permalink{{end}}</a>
     <a class="u-syndication" href="{{.BlueskyURL}}">View on Bluesky</a>
   </p>
+  {{template "interactions" .Interactions}}
 </article>
 {{end}}
+
+{{define "interactions"}}{{with .}}
+<section class="interactions">
+  <h2>Interactions</h2>
+  {{range $group := .}}
+  <details{{if le (len .Items) 5}} open{{end}}>
+    <summary>{{.Label}} ({{len .Items}})</summary>
+    {{if .Facepile}}
+    <ul class="facepile">
+      {{range .Items}}
+      <li class="{{$group.Property}} h-cite">
+        <a class="u-url" href="{{.SourceURL}}" rel="ugc">
+          <span class="p-author h-card">{{if .PhotoURL}}<img class="u-photo" src="{{.PhotoURL}}" alt="{{or .AuthorName "Reader"}}" loading="lazy">{{else}}{{or .AuthorName "Reader"}}{{end}}</span>
+        </a>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    {{range .Items}}
+    <div class="{{$group.Property}} h-cite">
+      {{if .AuthorURL}}<a class="p-author h-card" href="{{.AuthorURL}}" rel="ugc">{{or .AuthorName "Reader"}}</a>{{else}}<span class="p-author h-card">{{or .AuthorName "Reader"}}</span>{{end}}
+      <a class="u-url" href="{{.SourceURL}}" rel="ugc">Source</a>
+      {{if and (eq .Kind "rsvp") .RSVP}}<span class="p-rsvp">{{.RSVP}}</span>{{end}}
+      {{with .Text}}<p class="e-content">{{.}}</p>{{end}}
+    </div>
+    {{end}}
+    {{end}}
+  </details>
+  {{end}}
+</section>
+{{end}}{{end}}
 
 {{define "embed"}}
 <div class="embed">

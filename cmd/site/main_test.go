@@ -18,7 +18,7 @@ func TestStartupBackfill(t *testing.T) {
 	cfg := config.Config{DID: did, PublicationURI: "at://" + did + "/site.standard.publication/abc", PDSURL: fake.URL, CacheDBPath: filepath.Join(t.TempDir(), "cache.db")}
 	start := func() (http.Handler, func()) {
 		t.Helper()
-		h, close, err := siteHandler(t.Context(), cfg)
+		h, close, err := siteHandler(t.Context(), cfg, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

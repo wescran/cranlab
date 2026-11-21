@@ -21,6 +21,8 @@ const SiteTitle = "CranLab"
 // Deps are the server's collaborators.
 type Deps struct {
 	Store content.ContentStore
+	// Interactions is optional; detail pages remain readable without it.
+	Interactions InteractionReader
 	// Now returns the current time. Nil means time.Now.
 	Now func() time.Time
 	// Blobs streams owner media.

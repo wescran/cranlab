@@ -128,6 +128,7 @@ func (s *server) article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := ArticlePage{ArticleSummary: summarize(a), Body: body, SyndicationURL: render.PostURL(a.AnnouncementURI)}
+	view.Interactions = s.interactionGroups(r.Context(), view.URL)
 	page := Page{Title: a.Title, Description: view.Description, Data: view, CanonicalURL: s.cfg.SiteURL + view.URL}
 	page.DocumentID = strings.TrimPrefix(a.URI, "at://")
 	if cidPattern.MatchString(a.CoverCID) {
@@ -169,6 +170,7 @@ func (s *server) note(w http.ResponseWriter, r *http.Request) {
 		title = "Note"
 	}
 	view := s.noteView(n)
+	view.Interactions = s.interactionGroups(r.Context(), view.URL)
 	s.render(w, r, "note", http.StatusOK, Page{Title: title, Description: render.Excerpt(n.Text, 160), Data: view, CanonicalURL: s.cfg.SiteURL + view.URL})
 }
 
