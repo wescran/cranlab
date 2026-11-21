@@ -23,6 +23,7 @@ type Record[T any] struct {
 
 // Document is a site.standard.document record (an article).
 type Document struct {
+	Type        string         `json:"$type,omitempty"`
 	Site        string         `json:"site"`
 	Path        string         `json:"path"`
 	Title       string         `json:"title"`
@@ -52,6 +53,7 @@ func (d Document) Markdown() *string {
 
 // Post is an app.bsky.feed.post record.
 type Post struct {
+	Type      string   `json:"$type,omitempty"`
 	Text      string   `json:"text"`
 	CreatedAt string   `json:"createdAt"`
 	Facets    []Facet  `json:"facets"`

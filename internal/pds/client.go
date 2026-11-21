@@ -1,5 +1,4 @@
-// Package pds reads records and blobs from an atproto PDS over its public
-// XRPC endpoints.
+// Package pds accesses records and blobs on an atproto PDS over XRPC.
 package pds
 
 import (
@@ -24,8 +23,7 @@ var rkeyRe = regexp.MustCompile(`^at://[^/]+/[^/]+/([^/]+)$`)
 // ErrNotFound is returned (wrapped) when a record or blob doesn't exist.
 var ErrNotFound = errors.New("pds: not found")
 
-// Client reads from one PDS through its public XRPC endpoints. It never logs
-// in.
+// Client accesses one PDS. Public reads do not need a session.
 type Client struct {
 	baseURL string
 	hc      *http.Client
@@ -232,14 +230,23 @@ func (c *Client) ListPosts(ctx context.Context, did, cursor string, limit int) (
 // GetPost returns one app.bsky.feed.post record. A missing record is an error
 // wrapping ErrNotFound.
 func (c *Client) GetPost(ctx context.Context, did, rkey string) (Record[Post], error) {
+	return getRecord[Post](ctx, c, did, PostCollection, rkey)
+}
+
+// GetDocument includes the raw document value for a lossless conditional update.
+func (c *Client) GetDocument(ctx context.Context, did, rkey string) (Record[Document], error) {
+	return getRecord[Document](ctx, c, did, DocumentCollection, rkey)
+}
+
+func getRecord[T any](ctx context.Context, c *Client, did, collection, rkey string) (Record[T], error) {
 	query := url.Values{
 		"repo":       {did},
-		"collection": {PostCollection},
+		"collection": {collection},
 		"rkey":       {rkey},
 	}
 	resp, err := c.get(ctx, "com.atproto.repo.getRecord", query)
 	if err != nil {
-		return Record[Post]{}, fmt.Errorf("GetPost: %w", err)
+		return Record[T]{}, fmt.Errorf("getRecord: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -249,15 +256,12 @@ func (c *Client) GetPost(ctx context.Context, did, rkey string) (Record[Post], e
 		Value jsontext.Value `json:"value"`
 	}
 	if err := json.UnmarshalRead(resp.Body, &out); err != nil {
-		return Record[Post]{}, fmt.Errorf("GetPost: %w", err)
+		return Record[T]{}, fmt.Errorf("getRecord: %w", err)
 	}
-
-	record, err := decodeRecord[Post](out.URI, out.CID, out.Value)
-	if err != nil {
-		return Record[Post]{}, fmt.Errorf("GetPost: %w", err)
+	if out.URI != "at://"+did+"/"+collection+"/"+rkey {
+		return Record[T]{}, errors.New("getRecord: unexpected record URI")
 	}
-
-	return record, nil
+	return decodeRecord[T](out.URI, out.CID, out.Value)
 }
 
 // GetBlob streams a blob and returns its Content-Type as reported by the PDS.

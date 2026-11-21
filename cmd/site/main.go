@@ -13,6 +13,7 @@ import (
 	"github.com/wescran/cranlab/internal/config"
 	"github.com/wescran/cranlab/internal/pds"
 	"github.com/wescran/cranlab/internal/store"
+	"github.com/wescran/cranlab/internal/syndicate"
 	"github.com/wescran/cranlab/internal/web"
 )
 
@@ -29,10 +30,25 @@ func siteHandler(ctx context.Context, cfg config.Config) (http.Handler, func(), 
 		db.Close()
 		return nil, nil, err
 	}
-	stop := store.StartSync(ctx, client.SubscribeRepos, func(ctx context.Context) error {
-		return db.RefreshArticles(ctx, client)
-	})
+	refresh := func(ctx context.Context) error { return db.RefreshArticles(ctx, client) }
+	if cfg.AppPassword != "" {
+		repair := syndicate.New(db, client, cfg.DID, cfg.PublicationURI, cfg.SiteURL, cfg.AppPassword, slog.Default())
+		refresh = afterRefresh(refresh, repair.Run)
+	}
+	stop := store.StartSync(ctx, client.SubscribeRepos, refresh)
 	return h, func() { stop(); db.Close() }, nil
+}
+
+// Never repair from a stale or partially refreshed snapshot. The existing
+// sync loop owns scheduling, serialization, cancellation and shutdown.
+func afterRefresh(refresh func(context.Context) error, repair func(context.Context)) func(context.Context) error {
+	return func(ctx context.Context) error {
+		if err := refresh(ctx); err != nil {
+			return err
+		}
+		repair(ctx)
+		return nil
+	}
 }
 
 func run() error {

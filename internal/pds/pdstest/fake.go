@@ -1,5 +1,5 @@
 // Package pdstest provides an in-memory fake PDS for tests. It serves the
-// read endpoints the site uses, with the same responses and error shapes as
+// XRPC endpoints the site uses, with the same responses and error shapes as
 // a real PDS.
 package pdstest
 
@@ -75,6 +75,8 @@ func New(t testing.TB, did string) *Server {
 		blobs:         map[string]blob{},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /xrpc/com.atproto.server.createSession", s.createSession)
+	mux.HandleFunc("POST /xrpc/com.atproto.repo.putRecord", s.putRecord)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.listRecords", s.listRecords)
 	mux.HandleFunc("GET /xrpc/com.atproto.repo.getRecord", s.getRecord)
 	mux.HandleFunc("GET /xrpc/com.atproto.sync.getBlob", s.getBlob)
@@ -117,10 +119,14 @@ func (s *Server) Put(collection, rkey string, value any) string {
 			panic(err)
 		}
 	}
-	sum := sha256.Sum256(append([]byte(collection+"/"+rkey+"\n"), raw...))
-	cid := "bafyrei" + hex.EncodeToString(sum[:])[:40]
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.putLocked(collection, rkey, raw)
+}
+
+func (s *Server) putLocked(collection, rkey string, raw jsontext.Value) string {
+	sum := sha256.Sum256(append([]byte(collection+"/"+rkey+"\n"), raw...))
+	cid := "bafyrei" + hex.EncodeToString(sum[:])[:40]
 	if s.records[collection] == nil {
 		s.records[collection] = map[string]record{}
 	}
