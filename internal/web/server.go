@@ -123,17 +123,52 @@ func New(cfg config.Config, deps Deps) (http.Handler, error) {
 // ServeHTTP permanently redirects paths with a trailing slash to the same path
 // without it, then routes the request.
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rPath := r.URL.Path
-	if strings.HasSuffix(rPath, "/") && rPath != "/" {
-		target := strings.TrimRight(rPath, "/")
-		query := r.URL.RawQuery
-		if query != "" {
-			target += "?" + query
+	rPath := r.URL.EscapedPath()
+	if strings.HasSuffix(rPath, "/") && rPath != "/" && !strings.HasPrefix(rPath, "/blog/") {
+		// Exactly one leading slash: Location must be a path, never an authority.
+		target := "/" + strings.Trim(rPath, "/")
+		if r.URL.RawQuery != "" || r.URL.ForceQuery {
+			target += "?" + r.URL.RawQuery
 		}
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Location", target)
+		w.WriteHeader(http.StatusMovedPermanently)
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	// Successful public pages (including the feed and publication identity)
+	// share a short freshness window and can be served stale on an outage.
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		path := r.URL.Path
+		switch {
+		case strings.HasPrefix(path, "/media/"):
+			w.Header().Set("Cache-Control", immutableCache)
+		case strings.HasPrefix(path, "/static/"), path == "/healthz", path == "/robots.txt":
+			// Static verifies the content version itself. Leave utility endpoints alone.
+		default:
+			w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=60, stale-if-error=604800")
+		}
+	}
+	s.mux.ServeHTTP(cacheWriter{w}, r)
+}
+
+const immutableCache = "public, max-age=31536000, immutable"
+
+// cacheWriter replaces the success policy before an error is sent. This also
+// covers plain-text errors (e.g. from media/static) without buffering a body.
+type cacheWriter struct{ http.ResponseWriter }
+
+func (w cacheWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w cacheWriter) WriteHeader(status int) {
+	switch {
+	case status == http.StatusNotFound:
+		w.Header().Set("Cache-Control", "public, max-age=60")
+	case status >= 500:
+		w.Header().Set("Cache-Control", "no-store")
+	case status >= 300 && status != http.StatusNotModified:
+		w.Header().Del("Cache-Control")
+	}
+	w.ResponseWriter.WriteHeader(status)
 }
 
 // renderError writes the 404 or 503 page with that status.
