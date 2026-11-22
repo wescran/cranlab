@@ -33,6 +33,20 @@ func mustNotContain(t *testing.T, body string, unwanted ...string) {
 	}
 }
 
+func TestPagesUseSystemColorSchemeOnly(t *testing.T) {
+	f := newFixture(t)
+	for _, path := range []string{"/", "/articles/welcome"} {
+		t.Run(path, func(t *testing.T) {
+			status, body := f.get(t, path)
+			if status != http.StatusOK {
+				t.Fatalf("GET %s = %d", path, status)
+			}
+			mustContain(t, body, `<meta name="color-scheme" content="light dark">`)
+			mustNotContain(t, body, "<script", "theme-toggle", "data-theme=")
+		})
+	}
+}
+
 func TestCurrentNavigation(t *testing.T) {
 	f := newFixture(t)
 	for _, tc := range []struct{ path, link, current string }{

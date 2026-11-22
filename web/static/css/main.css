@@ -43,7 +43,7 @@
 
 /* =========================================================================
    2. Tokens
-   Cobalt & Amber. System colors work without scripts or stored state.
+   Cobalt & Amber, following the system color scheme.
    ========================================================================= */
 
 :root {
@@ -74,9 +74,6 @@
   --radius-sm: 2px;
   --measure: 50rem;
 }
-
-:root[data-theme="dark"] { color-scheme: dark; }
-:root[data-theme="light"] { color-scheme: light; }
 
 /* =========================================================================
    3. Base
@@ -239,35 +236,7 @@ code, kbd, samp, pre {
 }
 
 @media (max-width: 40rem) {
-  /* Put the utility beside the wordmark; give section links the whole next row. */
-  .site-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "brand theme" "nav nav";
-  }
-  .site-header .brand { grid-area: brand; justify-self: start; }
-  .site-header nav { grid-area: nav; margin-inline-start: 0; }
-  #theme-toggle { grid-area: theme; }
-}
-
-#theme-toggle {
-  padding: .35rem .57rem;
-  border: 2px solid var(--strong);
-  border-radius: var(--radius-sm);
-  box-shadow: 2px 2px var(--shadow);
-  background: var(--surface);
-  color: var(--text);
-  font: 600 .85rem/1.4 var(--font-mono);
-  text-decoration: none;
-  cursor: pointer;
-}
-#theme-toggle:hover {
-  background: var(--code-bg);
-  color: var(--accent);
-}
-#theme-toggle:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+  .site-header nav { flex-basis: 100%; }
 }
 
 /* =========================================================================

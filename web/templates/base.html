@@ -34,7 +34,6 @@
      flash. Same versioned URL as main.css's @font-face, or the browser
      downloads it twice. */}}
 <link rel="preload" href="{{asset "fonts/Geist-Variable.woff2"}}" as="font" type="font/woff2" crossorigin>
-<script src="{{asset "js/theme.js"}}"></script>
 <link rel="stylesheet" href="{{asset "css/main.css"}}">
 </head>
 <body>
@@ -50,7 +49,6 @@
         <li><a href="/index.xml">RSS</a></li>
       </ul>
     </nav>
-    <button hidden type="button" id="theme-toggle">Dark mode</button>
   </header>
   <main id="main" tabindex="-1">
     {{block "main" .}}{{end}}
