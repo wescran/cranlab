@@ -33,6 +33,28 @@ func mustNotContain(t *testing.T, body string, unwanted ...string) {
 	}
 }
 
+func TestCurrentNavigation(t *testing.T) {
+	f := newFixture(t)
+	for _, tc := range []struct{ path, link, current string }{
+		{"/", "/", "page"}, {"/about", "/about", "page"},
+		{"/articles", "/articles", "page"}, {"/articles/welcome", "/articles", "location"},
+		{"/notes/3n0025", "/notes", "location"}, {"/tags/writing", "/tags", "location"},
+		{"/articles/missing", "", ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			_, body := f.get(t, tc.path)
+			if tc.current == "" {
+				mustNotContain(t, body, "aria-current=")
+				return
+			}
+			mustContain(t, body, `href="`+tc.link+`" aria-current="`+tc.current+`"`)
+			if strings.Count(body, "aria-current=") != 1 {
+				t.Error("want exactly one current navigation link")
+			}
+		})
+	}
+}
+
 func TestArticlesPage(t *testing.T) {
 	code, body := newFixture(t).get(t, "/articles")
 	if code != http.StatusOK {

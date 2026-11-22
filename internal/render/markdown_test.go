@@ -58,10 +58,16 @@ func TestArticleBodyGFM(t *testing.T) {
 
 func TestArticleBodyHighlightsFencedCode(t *testing.T) {
 	got := body(t, "```go\nfunc main() {}\n```\n")
-	assertContains(t, got, `class="chroma"`, `<span class="kd">func</span>`)
+	assertContains(t, got, `<div class="code-label">go</div>`, `class="chroma"`, `<span class="kd">func</span>`)
 	if strings.Contains(got, `style="`) {
 		t.Error("code colors should follow theme classes, not inline styles")
 	}
+}
+
+func TestCodeFrameUnhighlighted(t *testing.T) {
+	got := body(t, "```\n  hello\n```\n\n```odd<lang>\n  x < y\n```\n")
+	assertContains(t, got, "<div class=\"code-label\">Plain text</div><pre><code>  hello\n</code></pre>",
+		`<div class="code-label">odd&lt;lang&gt;</div><pre><code class="language-odd&lt;lang&gt;">`, "  x &lt; y\n</code></pre>")
 }
 
 func TestArticleBodyKeepsRawHTML(t *testing.T) {

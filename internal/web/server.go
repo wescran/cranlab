@@ -40,8 +40,8 @@ type Page struct {
 	CoverCID     string
 	// DocumentID is an Article record identifier without the literal at:// scheme.
 	DocumentID string
-	// Path is the request path, used to mark the current navigation item.
-	Path string
+	// View identifies the rendered page, including detail and error views.
+	View string
 	// Year is the current year, for the footer.
 	Year int
 	// Config contains only publicly visible template settings.
@@ -199,7 +199,7 @@ func (s *server) renderError(w http.ResponseWriter, r *http.Request, status int)
 // render executes a page template into a buffer and writes it only if that
 // succeeded, so a failure never sends a half-written page.
 func (s *server) render(w http.ResponseWriter, r *http.Request, name string, status int, p Page) {
-	p.Path = r.URL.Path
+	p.View = name
 	if p.CanonicalURL == "" {
 		p.CanonicalURL = s.cfg.SiteURL + r.URL.EscapedPath()
 	}

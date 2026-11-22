@@ -56,6 +56,7 @@ func ArticleBody(markdown *string, textContent string, o Options) (template.HTML
 	md := goldmark.New(
 		goldmark.WithExtensions(extension.GFM, callouts{}, highlighting.NewHighlighting(
 			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+			highlighting.WithWrapperRenderer(codeFrame),
 		)),
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(blobRewriter{o}, 100))),
 		goldmark.WithRendererOptions(html.WithUnsafe()),
@@ -66,6 +67,27 @@ func ArticleBody(markdown *string, textContent string, o Options) (template.HTML
 		return "", fmt.Errorf("render article Markdown: %w", err)
 	}
 	return template.HTML(buf.String()), nil
+}
+
+// codeFrame labels fenced blocks with their actual language. Chroma supplies
+// pre/code for highlighted blocks only; preserve whitespace for plain text too.
+func codeFrame(w util.BufWriter, ctx highlighting.CodeBlockContext, entering bool) {
+	if entering {
+		label, languageClass := "Plain text", ""
+		if lang, ok := ctx.Language(); ok {
+			label = template.HTMLEscapeString(string(lang))
+			languageClass = ` class="language-` + label + `"`
+		}
+		_, _ = w.WriteString(`<div class="code-frame"><div class="code-label">` + label + `</div>`)
+		if !ctx.Highlighted() {
+			_, _ = w.WriteString("<pre><code" + languageClass + ">")
+		}
+		return
+	}
+	if !ctx.Highlighted() {
+		_, _ = w.WriteString("</code></pre>")
+	}
+	_, _ = w.WriteString("</div>\n")
 }
 
 // blobRewriter points the owner's getBlob URLs in images and links at
