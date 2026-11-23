@@ -49,6 +49,7 @@
         <li><a href="/index.xml">RSS</a></li>
       </ul>
     </nav>
+    <button type="button" class="theme-control" hidden>Light</button>
   </header>
   <main id="main" tabindex="-1">
     {{block "main" .}}{{end}}
@@ -75,5 +76,6 @@
       </ul>
     </address>
   </footer>
+  <script defer fetchpriority="low" src="{{asset "js/theme.js"}}"></script>
 </body>
 </html>

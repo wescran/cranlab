@@ -33,7 +33,7 @@ func mustNotContain(t *testing.T, body string, unwanted ...string) {
 	}
 }
 
-func TestPagesUseSystemColorSchemeOnly(t *testing.T) {
+func TestPagesProgressivelyEnhanceSystemTheme(t *testing.T) {
 	f := newFixture(t)
 	for _, path := range []string{"/", "/articles/welcome"} {
 		t.Run(path, func(t *testing.T) {
@@ -41,8 +41,16 @@ func TestPagesUseSystemColorSchemeOnly(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("GET %s = %d", path, status)
 			}
-			mustContain(t, body, `<meta name="color-scheme" content="light dark">`)
-			mustNotContain(t, body, "<script", "theme-toggle", "data-theme=")
+			mustContain(t, body, `<meta name="color-scheme" content="light dark">`, `<button type="button" class="theme-control" hidden>`)
+			tag := regexp.MustCompile(`<script defer fetchpriority="low" src="(/static/js/theme\.js\?v=[0-9a-f]{12})"></script>`).FindStringSubmatch(body)
+			if tag == nil || strings.Count(body, "<script") != 1 || strings.Index(body, tag[0]) < strings.Index(body, "</main>") {
+				t.Fatal("want just the deferred theme script, after the content")
+			}
+			mustNotContain(t, body, `as="script"`, `rel="modulepreload"`)
+			rec := get(t, f.handler, tag[1])
+			if rec.Code != http.StatusOK || !strings.HasSuffix(tag[1], "?v="+assetVersion(rec.Body.Bytes())) || rec.Header().Get("Cache-Control") != immutableCache {
+				t.Error("theme script must use the immutable URL for its served bytes")
+			}
 		})
 	}
 }

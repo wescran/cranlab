@@ -43,7 +43,7 @@
 
 /* =========================================================================
    2. Tokens
-   Cobalt & Amber, following the system color scheme.
+   Cobalt & Amber. Follow the system unless the reader selects an override.
    ========================================================================= */
 
 :root {
@@ -235,8 +235,37 @@ code, kbd, samp, pre {
   font-weight: 600;
 }
 
-@media (max-width: 40rem) {
-  .site-header nav { flex-basis: 100%; }
+.theme-control {
+  min-inline-size: 4.25rem;
+  padding: .35rem .55rem;
+  font: 500 .9rem/1.4 var(--font-mono);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  cursor: pointer;
+}
+.theme-control[hidden] {
+  /* Reserve both labels' space without exposing an inert button. */
+  display: inline-block;
+  visibility: hidden;
+}
+.theme-control:hover {
+  border-color: var(--text);
+  background: var(--surface);
+}
+.theme-control:active { background: var(--bg); }
+
+@media (max-width: 43rem) {
+  .site-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand theme" "nav nav";
+  }
+  .site-header .brand { grid-area: brand; justify-self: start; }
+  .site-header nav { grid-area: nav; margin-inline-start: 0; }
+  .theme-control { grid-area: theme; }
 }
 
 /* =========================================================================
