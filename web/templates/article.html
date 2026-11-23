@@ -1,24 +1,26 @@
 {{define "main"}}
 {{with .Data}}
   <article class="h-entry">
-    <header class="article-header">
-      <p class="back-link"><a href="/">← Back to Home</a></p>
-      <a class="u-url" href="{{$.Config.SiteURL}}{{.URL}}">
-        <h1 class="p-name">{{.Title}}</h1>
-      </a>
-      <p class="byline">
-        <span><a class="p-author h-card" href="{{$.Config.SiteURL}}/">Wesley Cranston</a></span>
-        {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
-        <span>{{.ReadingTime}} min read</span>
-        {{- with .SyndicationURL}}
-        <span><a class="u-syndication" href="{{.}}">Also on Bluesky</a></span>
-        {{- end}}
-      </p>
-      {{template "tags" .Tags}}
-    </header>
-    <section class="e-content">
-      {{.Body}}
-    </section>
+    <div class="reading-sheet">
+      <header class="article-header">
+        <p class="back-link"><a href="/">← Back to Home</a></p>
+        <a class="u-url" href="{{$.Config.SiteURL}}{{.URL}}">
+          <h1 class="p-name">{{.Title}}</h1>
+        </a>
+        <p class="byline">
+          <span><a class="p-author h-card" href="{{$.Config.SiteURL}}/">Wesley Cranston</a></span>
+          {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
+          <span>{{.ReadingTime}} min read</span>
+          {{- with .SyndicationURL}}
+          <span><a class="u-syndication" href="{{.}}">Also on Bluesky</a></span>
+          {{- end}}
+        </p>
+        {{template "tags" .Tags}}
+      </header>
+      <section class="e-content">
+        {{.Body}}
+      </section>
+    </div>
     {{template "interactions" .Interactions}}
   </article>
 {{end}}

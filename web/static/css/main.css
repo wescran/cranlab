@@ -274,10 +274,8 @@ code, kbd, samp, pre {
    class on an inline <a> (microformats) and must not pick up this layout.
    ========================================================================= */
 
-/* Shared frame for visual panels, not inline identity links, tag chips,
-   or the article's reading column. */
-section.h-card, .article-summary, article.note, .interactions,
-.embed-card, .code-frame, .callout {
+/* Shared frame for panels. Annotations inside the reading sheet stay flat. */
+section.h-card, .article-summary, article.note, .reading-sheet, .interactions, .embed-card {
   background: var(--surface);
   border: 2px solid var(--strong);
   border-radius: var(--radius-sm);
@@ -378,8 +376,17 @@ section.h-card img.u-photo {
    8. Single post
    ========================================================================= */
 
+.reading-sheet, .reading-sheet + .interactions {
+  padding: clamp(1rem, 3.4vw, 2.65rem);
+  margin-block: 0 2.5rem;
+}
+@media (max-width: 30rem) {
+  .reading-sheet, .reading-sheet + .interactions { margin-inline: -.55rem; }
+}
+
 .back-link { margin: 0 0 .55rem; font: .85rem/1.5 var(--font-mono); }
 .article-header {
+  margin-bottom: 2rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--border);
 }
@@ -388,26 +395,18 @@ section.h-card img.u-photo {
   font-size: clamp(1.75rem, 3.6vw, 2.35rem);
   line-height: 1.15;
 }
-article > header {
-  margin-bottom: 2rem;
-}
-
-article > header > a {
+.article-header > a {
   display: block;
   color: var(--text);
   text-decoration: none;
 }
 
-article > header > a:hover h1 {
+.article-header > a:hover {
   text-decoration: underline;
   text-decoration-color: var(--accent);
 }
 
-article > header h1 {
-  margin-bottom: 0.5rem;
-}
-
-article > header .tags {
+.article-header .tags {
   margin: 0.5rem 0 0;
 }
 
@@ -431,7 +430,8 @@ article > header .tags {
   border-bottom: 1px solid var(--border);
   letter-spacing: -.03em;
 }
-article > .e-content {
+.reading-sheet > .e-content > :last-child { margin-bottom: 0; }
+.reading-sheet > .e-content, article > .e-content {
   max-width: 68ch;
   font-size: 1.08rem;
   line-height: 1.75;
@@ -454,20 +454,19 @@ article > .e-content {
   tab-size: 4;
 }
 
-.code-frame { margin: 1.35rem 0; }
-.code-label {
-  padding: .3rem .9rem;
-  background: var(--code-bg);
+.reading-sheet .code-frame { margin: 1.35rem 0; background: var(--code-bg); }
+.reading-sheet .code-label {
+  padding: .72rem 1rem 0;
   color: var(--muted);
-  font: 600 .78rem/1.5 var(--font-mono);
+  font: 600 .7rem/1.5 var(--font-mono);
   letter-spacing: .06em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
 }
-.code-frame pre {
+.reading-sheet .code-frame pre {
   margin: 0;
+  padding-top: .4rem;
   border: 0;
-  background: var(--surface);
+  background: transparent;
 }
 .e-content :not(pre) > code {
   padding: .05em .25em;
@@ -852,6 +851,14 @@ article > hr {
 .interactions { padding: 1.15rem; margin: 2.5rem 0; }
 .interactions details { padding-block: .6rem; border-bottom: 1px dashed var(--border); }
 .interactions summary { cursor: pointer; }
+.reading-sheet + .interactions details { border: 0; }
+.reading-sheet + .interactions summary {
+  width: fit-content;
+  font: 500 .88rem/1.6 var(--font-mono);
+  color: var(--muted);
+}
+.reading-sheet + .interactions .h-cite { max-width: 60ch; margin-top: .75rem; }
+.reading-sheet + .interactions .h-cite > .u-url:not(:only-child) { margin-inline-start: .45rem; }
 main > article.note .note-meta { border-top: 1px dashed var(--border); padding-top: .55rem; }
 
 article.note .e-content {
@@ -942,19 +949,20 @@ article.note .e-content {
    15. Callouts (Obsidian "> [!type] Title" blocks in articles)
    ========================================================================= */
 
-.callout {
-  --callout: var(--accent);
+.reading-sheet .callout {
   margin-block: 1.5rem;
-  padding: 0.75rem 1rem;
-  background-image: linear-gradient(to right, var(--callout) 3px, transparent 3px);
+  padding: .15rem 0 .15rem 1.1rem;
+  border-inline-start: 3px solid var(--callout);
 }
+.callout { --callout: var(--accent); }
+.reading-sheet .callout p + p { margin-top: 0; }
 
 .callout > :last-child {
   margin-bottom: 0;
 }
 
-.callout-title {
-  margin-top: 0;
+.reading-sheet .callout-title {
+  margin-block: 0 .32rem;
   font: 700 .84rem/1.5 var(--font-mono);
   letter-spacing: .06em;
   text-transform: uppercase;
