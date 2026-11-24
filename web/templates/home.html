@@ -8,6 +8,7 @@
     </a>
     <header>
       <h1 class="p-name">Wesley Cranston</h1>
+      <span class="handle-pill">@cranlab.ca · Toronto, ON</span>
       <p class="p-note">
         Hello, world! Welcome to CranLab, my own personal presence on the internet and <a href="https://indieweb.org">IndieWeb</a>. I write about my current interests, my ongoing work on my homelab, and anything else that comes to mind. A proud Canadian and eternal Leafs fan! Stay curious!
       </p>
@@ -20,18 +21,17 @@
 
   {{- with .Data.Articles}}
   <section class="latest">
-    <h2>Recent Articles</h2>
+    <div class="section-head"><h2>Recent Articles</h2><a href="/articles">All articles <span aria-hidden="true">→</span></a></div>
     {{range .}}{{template "article-summary" .}}{{end}}
   </section>
   {{- end}}
 
   {{- with .Data.Notes}}
   <section class="latest">
-    <h2>Recent Notes</h2>
+    <div class="section-head"><h2>Recent Notes</h2><a href="/notes">All notes <span aria-hidden="true">→</span></a></div>
     <div class="h-feed notes">
       {{- range .}}{{template "note" .}}{{end}}
     </div>
-    <p><a href="/notes">All notes</a></p>
   </section>
   {{- end}}
 {{end}}

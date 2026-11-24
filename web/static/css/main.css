@@ -43,26 +43,29 @@
 
 /* =========================================================================
    2. Tokens
-   Cobalt & Amber. System colors work without scripts or stored state.
+   Cobalt & Amber. Follow the system unless the reader selects an override.
    ========================================================================= */
 
 :root {
-  color-scheme: light;
-  --bg: #f7f9fc;
-  --surface: #fff;
-  --text: #101b2a;
-  --muted: #495970;
-  --border: #aebed1;
-  --accent: #005fcc;
-  --maple: #c02c49;
+  color-scheme: light dark;
+  --bg: light-dark(#f7f9fc, #0b101b);
+  --surface: light-dark(#fff, #111827);
+  --text: light-dark(#0e1726, #edf2f7);
+  --muted: light-dark(#495970, #acbcd2);
+  --border: light-dark(#b8c6d9, #43516a);
+  --strong: light-dark(#0e1726, #c5cedd);
+  --shadow: light-dark(#0e1726, #33486b);
+  --accent: light-dark(#005fcc, #5cc8ff);
+  --on-accent: light-dark(#fff, #0b101b);
+  --maple: light-dark(#c02c49, #ff8491);
   --highlight: #ffca45;
   --on-highlight: #261d09;
-  --code-bg: #edf2f8;
+  --code-bg: light-dark(#edf2f8, #182235);
   --syntax-keyword: var(--accent);
   --syntax-type: var(--maple);
-  --syntax-function: #7734a0;
-  --syntax-string: #166339;
-  --syntax-number: #824900;
+  --syntax-function: light-dark(#7734a0, #d4b1ff);
+  --syntax-string: light-dark(#166339, #8edba6);
+  --syntax-number: light-dark(#824900, #ffcd67);
   --syntax-comment: var(--muted);
 
   --font-sans: 'Geist', system-ui, sans-serif;
@@ -70,23 +73,6 @@
   --rule-height: 2px;
   --radius-sm: 2px;
   --measure: 50rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #0b101b;
-    --surface: #121c2c;
-    --text: #edf2f7;
-    --muted: #acbcd2;
-    --border: #44546e;
-    --accent: #5cc8ff;
-    --maple: #ff8491;
-    --code-bg: #101a29;
-    --syntax-function: #d4b1ff;
-    --syntax-string: #8edba6;
-    --syntax-number: #ffcd67;
-  }
 }
 
 /* =========================================================================
@@ -105,10 +91,11 @@ body {
   min-height: 100dvh;
   max-width: var(--measure);
   margin: 0 auto;
-  padding-inline: 1rem;
+  padding: clamp(1rem, 3vw, 2rem) 1.25rem 0;
   color: var(--text);
   font-family: var(--font-sans);
   font-weight: 400;
+  font-size: 1.02rem;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -129,7 +116,7 @@ body {
 
 .skip-link:focus { transform: none; }
 
-header > nav, body > footer, .byline, .tags, .note-meta, .older {
+.site-header nav, body > footer, .byline, .tags, .note-meta, .older {
   font-family: var(--font-mono);
 }
 
@@ -191,55 +178,94 @@ code, kbd, samp, pre {
    4. Site header (nav)
    ========================================================================= */
 
-header > nav {
+.site-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
-  gap: .5rem 1rem;
-  padding-block: 1rem;
-  border-bottom: var(--rule-height) solid var(--text);
-  margin-bottom: clamp(1.5rem, 5vw, 3rem);
+  gap: .85rem clamp(1.5rem, 4vw, 2.25rem);
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--strong);
+  margin-bottom: clamp(1.5rem, 5vw, 2.5rem);
 }
 
-/* Site title: leaf + name */
-header > nav > a {
+.brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.35em;
-  font-size: 1.25rem;
-  font-weight: 800;
+  gap: .5rem;
+  font: 700 1.32rem/1.2 var(--font-sans);
+  letter-spacing: -.03em;
   text-decoration: none;
   color: var(--text);
 }
+.brand strong { font-weight: inherit; }
+.brand .icon-maple-leaf { width: 1.15em; height: 1.15em; color: var(--maple); }
 
-header > nav > a > .icon {
-  color: var(--maple);
-}
-
-header > nav > ul {
+.site-header nav { margin-inline-start: auto; }
+.site-header ul {
   display: flex;
   flex-wrap: wrap;
-  gap: .25rem clamp(.25rem, 1vw, 1rem);
+  align-items: center;
+  gap: .25rem .2rem;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-header > nav > ul a {
+.site-header nav a {
   display: inline-block;
-  padding: .25em;
-  font-size: .9rem;
-  font-weight: 600;
-  text-decoration: none;
+  padding: .25rem .5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   color: var(--text);
+  font-size: .9rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.site-header nav a:not([aria-current]):hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: .22em;
 }
 
-header > nav > ul a:hover,
-header > nav > ul a[aria-current="page"] {
-  background: var(--highlight);
-  color: var(--on-highlight);
-  text-decoration: underline;
+.site-header nav a[aria-current] {
+  background: var(--accent);
+  border-color: var(--strong);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.theme-control {
+  min-inline-size: 4.25rem;
+  padding: .35rem .55rem;
+  font: 500 .9rem/1.4 var(--font-mono);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  cursor: pointer;
+}
+.theme-control[hidden] {
+  /* Reserve both labels' space without exposing an inert button. */
+  display: inline-block;
+  visibility: hidden;
+}
+.theme-control:hover {
+  border-color: var(--text);
+  background: var(--surface);
+}
+.theme-control:active { background: var(--bg); }
+
+@media (max-width: 43rem) {
+  .site-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand theme" "nav nav";
+  }
+  .site-header .brand { grid-area: brand; justify-self: start; }
+  .site-header nav { grid-area: nav; margin-inline-start: 0; }
+  .theme-control { grid-area: theme; }
 }
 
 /* =========================================================================
@@ -248,57 +274,72 @@ header > nav > ul a[aria-current="page"] {
    class on an inline <a> (microformats) and must not pick up this layout.
    ========================================================================= */
 
-section.h-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.5rem;
-  padding: clamp(1rem, 4vw, 2rem);
+/* Shared frame for panels. Annotations inside the reading sheet stay flat. */
+section.h-card, .article-summary, article.note, .reading-sheet, .interactions, .embed-card {
   background: var(--surface);
-  border: 1px solid var(--text);
-  box-shadow: 4px 4px var(--border);
-  margin-bottom: 3rem;
+  border: 2px solid var(--strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 4px 4px var(--shadow);
 }
 
-section.h-card > header {
-  flex: 1;
-  min-width: 0; /* allow long text to wrap */
+section.h-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 1.35rem;
+  padding: clamp(1rem, 4vw, 1.5rem);
 }
 
 section.h-card h1 {
-  margin-top: 0;
+  font-size: 1.65rem;
+  letter-spacing: -.03em;
+  margin: 0 0 .4rem;
 }
-
-section.h-card p {
-  margin-top: 0.5rem;
+.handle-pill, .tags a {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
-
-section.h-card > a {
-  flex: none;
-  line-height: 0; /* remove inline gap under the img */
+.handle-pill {
+  display: inline-block;
+  color: var(--muted);
+  font: .82rem/1.6 var(--font-mono);
+  padding: .05rem .45rem;
+  margin-bottom: .6rem;
 }
-
+section.h-card p { margin: 0; }
 section.h-card img.u-photo {
-  width: 10rem;
-  height: auto;
-  aspect-ratio: 1;
+  display: block;
+  box-sizing: border-box;
+  width: 6rem;
+  height: 6rem;
   object-fit: cover;
-  border-radius: 25%;
+  border: 2px solid var(--strong);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 36rem) {
+  section.h-card { grid-template-columns: minmax(0, 1fr); gap: .85rem; }
 }
 
-@media (max-width: 40rem) {
-  section.h-card {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
+/* Home sections */
+.latest { margin: 2.75rem 0; }
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .25rem 1rem;
+  padding-bottom: .45rem;
+  border-bottom: 1px solid var(--border);
+  font: .85rem/1.5 var(--font-mono);
 }
-
-/* =========================================================================
-   6. Home sections
-   ========================================================================= */
-
-.latest { margin-block: 2.5rem; }
-.latest > h2 { margin-bottom: 1rem; }
+.section-head h2, .interactions h2 {
+  font: 650 .86rem/1.5 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin: 0;
+}
 
 /* =========================================================================
    7. Byline: author · date · reading time (post page and home)
@@ -324,6 +365,8 @@ section.h-card img.u-photo {
   text-decoration: none;
 }
 
+.article-header .byline a { color: var(--accent); text-decoration: underline; }
+
 .byline a:hover {
   color: var(--accent);
   text-decoration: underline;
@@ -333,26 +376,37 @@ section.h-card img.u-photo {
    8. Single post
    ========================================================================= */
 
-article > header {
-  margin-bottom: 2rem;
+.reading-sheet, .reading-sheet + .interactions {
+  padding: clamp(1rem, 3.4vw, 2.65rem);
+  margin-block: 0 2.5rem;
+}
+@media (max-width: 30rem) {
+  .reading-sheet, .reading-sheet + .interactions { margin-inline: -.55rem; }
 }
 
-article > header > a {
+.back-link { margin: 0 0 .55rem; font: .85rem/1.5 var(--font-mono); }
+.article-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.article-header h1 {
+  margin: 0 0 .75rem;
+  font-size: clamp(1.75rem, 3.6vw, 2.35rem);
+  line-height: 1.15;
+}
+.article-header > a {
   display: block;
   color: var(--text);
   text-decoration: none;
 }
 
-article > header > a:hover h1 {
+.article-header > a:hover {
   text-decoration: underline;
   text-decoration-color: var(--accent);
 }
 
-article > header h1 {
-  margin-bottom: 0.5rem;
-}
-
-article > header .tags {
+.article-header .tags {
   margin: 0.5rem 0 0;
 }
 
@@ -362,21 +416,22 @@ article > header .tags {
 
 .article-summary, article.note {
   margin-block: 1rem;
-  padding: clamp(1rem, 3vw, 1.5rem);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--accent);
+  padding: 1rem 1.15rem;
 }
-
-.article-summary :is(h2, h3) { margin: .25rem 0; }
-
-.article-summary .p-summary {
-  margin: .35rem 0;
+.article-summary :is(h2, h3) { margin: 0 0 .35rem; letter-spacing: -.025em; }
+.article-summary .p-name { color: var(--text); text-decoration: none; }
+.article-summary .p-name:hover { color: var(--accent); text-decoration: underline; }
+.summary-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .85rem; }
+.summary-meta .tags { margin: 0; }
+.article-summary .p-summary { margin: .45rem 0 0; color: var(--muted); }
+.e-content h2 {
+  margin: 2.1rem 0 .75rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: -.03em;
 }
-
-.article-summary .tags { margin: .5rem 0 0; }
-
-article > .e-content {
+.reading-sheet > .e-content > :last-child { margin-bottom: 0; }
+.reading-sheet > .e-content, article > .e-content {
   max-width: 68ch;
   font-size: 1.08rem;
   line-height: 1.75;
@@ -399,6 +454,20 @@ article > .e-content {
   tab-size: 4;
 }
 
+.reading-sheet .code-frame { margin: 1.35rem 0; background: var(--code-bg); }
+.reading-sheet .code-label {
+  padding: .72rem 1rem 0;
+  color: var(--muted);
+  font: 600 .7rem/1.5 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.reading-sheet .code-frame pre {
+  margin: 0;
+  padding-top: .4rem;
+  border: 0;
+  background: transparent;
+}
 .e-content :not(pre) > code {
   padding: .05em .25em;
   background: var(--code-bg);
@@ -442,10 +511,12 @@ article > .e-content {
   text-decoration: none;
 }
 
+.tags .p-category::before { content: "#" / ""; }
+
 .tags a:hover {
-  background: var(--highlight);
-  border-color: var(--highlight);
-  color: var(--on-highlight);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 
 /* Count on the tags index */
@@ -518,6 +589,7 @@ body > footer {
   gap: 0.25rem 2rem;
   margin-top: auto; /* body is a flex column: pin to viewport bottom */
   padding-block: 1.5rem;
+  border-top: 2px solid var(--strong);
   color: var(--muted); /* text size comes from <small> (UA default: smaller) */
 }
 
@@ -709,11 +781,12 @@ article > hr {
   padding: 0;
 }
 
-.facepile .h-card {
-  display: block;
-  line-height: 0; /* no gap under the avatar */
-  border-radius: 50%;
-}
+.facepile .h-card { display: inline-flex; align-items: center; }
+.facepile .u-photo { width: 2rem; height: 2rem; border-radius: 50%; object-fit: cover; }
+.interactions .h-cite { margin-block: .45rem; }
+.interactions .p-author { font-weight: 600; }
+.interactions .h-cite p { margin: .25rem 0 0; }
+.interactions .h-cite > .u-url:not(:only-child) { font: .82rem var(--font-mono); }
 
 .facepile a.h-card:hover {
   outline: 2px solid var(--accent);
@@ -775,7 +848,18 @@ article > hr {
    14. Notes and post embeds
    ========================================================================= */
 
-article.note { border-inline-start-color: var(--highlight); }
+.interactions { padding: 1.15rem; margin: 2.5rem 0; }
+.interactions details { padding-block: .6rem; border-bottom: 1px dashed var(--border); }
+.interactions summary { cursor: pointer; }
+.reading-sheet + .interactions details { border: 0; }
+.reading-sheet + .interactions summary {
+  width: fit-content;
+  font: 500 .88rem/1.6 var(--font-mono);
+  color: var(--muted);
+}
+.reading-sheet + .interactions .h-cite { max-width: 60ch; margin-top: .75rem; }
+.reading-sheet + .interactions .h-cite > .u-url:not(:only-child) { margin-inline-start: .45rem; }
+main > article.note .note-meta { border-top: 1px dashed var(--border); padding-top: .55rem; }
 
 article.note .e-content {
   overflow-wrap: anywhere;
@@ -826,14 +910,13 @@ article.note .e-content {
   gap: 0.75rem;
   align-items: center;
   padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   color: var(--text);
   text-decoration: none;
 }
 
-.embed-card:hover {
-  border-color: var(--accent);
+.embed-card:hover strong {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .embed-card img {
@@ -866,22 +949,23 @@ article.note .e-content {
    15. Callouts (Obsidian "> [!type] Title" blocks in articles)
    ========================================================================= */
 
-.callout {
-  --callout: var(--accent);
+.reading-sheet .callout {
   margin-block: 1.5rem;
-  padding: 0.75rem 1rem;
-  border-left: 4px solid var(--callout);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--callout) 8%, transparent);
+  padding: .15rem 0 .15rem 1.1rem;
+  border-inline-start: 3px solid var(--callout);
 }
+.callout { --callout: var(--accent); }
+.reading-sheet .callout p + p { margin-top: 0; }
 
 .callout > :last-child {
   margin-bottom: 0;
 }
 
-.callout-title {
-  margin-top: 0;
-  font-weight: 600;
+.reading-sheet .callout-title {
+  margin-block: 0 .32rem;
+  font: 700 .84rem/1.5 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
   color: var(--callout);
 }
 

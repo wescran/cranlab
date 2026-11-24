@@ -12,13 +12,15 @@
 
 {{define "article-summary"}}
 <article class="h-entry article-summary">
-  <p class="byline">
-    {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
-    <span>{{.ReadingTime}} min read</span>
-  </p>
   {{block "summary-heading" .}}<h2>{{template "article-link" .}}</h2>{{end}}
+  <div class="summary-meta">
+    <p class="byline">
+      {{if .HasPublished}}<time class="dt-published" datetime="{{datetime .Published}}">{{date .Published}}</time>{{end}}
+      <span>{{.ReadingTime}} min read</span>
+    </p>
+    {{template "tags" .Tags}}
+  </div>
   {{with .Description}}<p class="p-summary">{{.}}</p>{{end}}
-  {{template "tags" .Tags}}
 </article>
 {{end}}
 

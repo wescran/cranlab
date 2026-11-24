@@ -38,17 +38,18 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header>
-    <nav>
-      <a href="/">{{template "icon-maple-leaf"}}<strong>CranLab</strong></a>
+  <header class="site-header">
+    <a class="brand" href="/"{{if eq .View "home"}} aria-current="page"{{end}}>{{template "icon-maple-leaf"}}<strong>CranLab</strong></a>
+    <nav aria-label="Primary">
       <ul>
-        <li><a href="/about"{{if eq .Path "/about"}} aria-current="page"{{end}}>About</a></li>
-        <li><a href="/articles"{{if eq .Path "/articles"}} aria-current="page"{{end}}>Articles</a></li>
-        <li><a href="/notes"{{if eq .Path "/notes"}} aria-current="page"{{end}}>Notes</a></li>
-        <li><a href="/tags"{{if eq .Path "/tags"}} aria-current="page"{{end}}>Tags</a></li>
+        <li><a href="/about"{{if eq .View "about"}} aria-current="page"{{end}}>About</a></li>
+        <li><a href="/articles"{{if eq .View "articles"}} aria-current="page"{{else if eq .View "article"}} aria-current="location"{{end}}>Articles</a></li>
+        <li><a href="/notes"{{if eq .View "notes"}} aria-current="page"{{else if eq .View "note"}} aria-current="location"{{end}}>Notes</a></li>
+        <li><a href="/tags"{{if eq .View "tags"}} aria-current="page"{{else if eq .View "tag"}} aria-current="location"{{end}}>Tags</a></li>
         <li><a href="/index.xml">RSS</a></li>
       </ul>
     </nav>
+    <button type="button" class="theme-control" hidden>Light</button>
   </header>
   <main id="main" tabindex="-1">
     {{block "main" .}}{{end}}
@@ -75,5 +76,6 @@
       </ul>
     </address>
   </footer>
+  <script defer fetchpriority="low" src="{{asset "js/theme.js"}}"></script>
 </body>
 </html>

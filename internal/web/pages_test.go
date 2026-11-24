@@ -33,6 +33,50 @@ func mustNotContain(t *testing.T, body string, unwanted ...string) {
 	}
 }
 
+func TestPagesProgressivelyEnhanceSystemTheme(t *testing.T) {
+	f := newFixture(t)
+	for _, path := range []string{"/", "/articles/welcome"} {
+		t.Run(path, func(t *testing.T) {
+			status, body := f.get(t, path)
+			if status != http.StatusOK {
+				t.Fatalf("GET %s = %d", path, status)
+			}
+			mustContain(t, body, `<meta name="color-scheme" content="light dark">`, `<button type="button" class="theme-control" hidden>`)
+			tag := regexp.MustCompile(`<script defer fetchpriority="low" src="(/static/js/theme\.js\?v=[0-9a-f]{12})"></script>`).FindStringSubmatch(body)
+			if tag == nil || strings.Count(body, "<script") != 1 || strings.Index(body, tag[0]) < strings.Index(body, "</main>") {
+				t.Fatal("want just the deferred theme script, after the content")
+			}
+			mustNotContain(t, body, `as="script"`, `rel="modulepreload"`)
+			rec := get(t, f.handler, tag[1])
+			if rec.Code != http.StatusOK || !strings.HasSuffix(tag[1], "?v="+assetVersion(rec.Body.Bytes())) || rec.Header().Get("Cache-Control") != immutableCache {
+				t.Error("theme script must use the immutable URL for its served bytes")
+			}
+		})
+	}
+}
+
+func TestCurrentNavigation(t *testing.T) {
+	f := newFixture(t)
+	for _, tc := range []struct{ path, link, current string }{
+		{"/", "/", "page"}, {"/about", "/about", "page"},
+		{"/articles", "/articles", "page"}, {"/articles/welcome", "/articles", "location"},
+		{"/notes/3n0025", "/notes", "location"}, {"/tags/writing", "/tags", "location"},
+		{"/articles/missing", "", ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			_, body := f.get(t, tc.path)
+			if tc.current == "" {
+				mustNotContain(t, body, "aria-current=")
+				return
+			}
+			mustContain(t, body, `href="`+tc.link+`" aria-current="`+tc.current+`"`)
+			if strings.Count(body, "aria-current=") != 1 {
+				t.Error("want exactly one current navigation link")
+			}
+		})
+	}
+}
+
 func TestArticlesPage(t *testing.T) {
 	code, body := newFixture(t).get(t, "/articles")
 	if code != http.StatusOK {
